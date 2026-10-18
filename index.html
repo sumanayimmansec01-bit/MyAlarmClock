@@ -77,7 +77,10 @@
   .dial.finished .round-label { color: var(--done); font-weight: 600; }
 
   /* Controls */
-  .controls { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
+  .controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .controls .btn.primary { width: 100%; font-size: 1.15rem; padding: 18px; }
+  .reset-btn { font-size: .85rem; padding: 6px 16px; }
+  .reset-btn:disabled { opacity: .4; cursor: default; }
   .btn {
     font: inherit; font-weight: 600; font-size: 1.05rem; border-radius: 16px; padding: 16px; cursor: pointer;
     border: 1px solid var(--line); background: var(--surface); color: var(--fg);
@@ -98,7 +101,8 @@
   .row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 12px; border: 1px solid var(--line); }
   .row .n { font-size: .8rem; color: var(--muted); }
   .row .m { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
-  .row button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 1.3rem; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; }
+  .row button { background: none; border: 1px solid var(--danger); color: var(--danger); font: inherit; font-size: .85rem; font-weight: 500; min-height: 36px; padding: 0 12px; border-radius: 10px; cursor: pointer; }
+  .row button:active { background: var(--bg); }
   .row.current { border-color: var(--accent); background: var(--accent-soft); }
   .row.done .m { color: var(--muted); text-decoration: line-through; }
   .row.done .n::after { content: " ✓"; color: var(--done); }
@@ -151,8 +155,8 @@
   </div>
 
   <div class="controls">
-    <button class="btn" id="resetBtn" type="button">รีเซ็ต</button>
     <button class="btn primary" id="startBtn" type="button">เริ่ม</button>
+    <button class="ghost-btn reset-btn" id="resetBtn" type="button">↺ รีเซ็ต</button>
   </div>
 
   <section class="panel">
@@ -357,7 +361,7 @@
       const del = document.createElement("button");
       del.type = "button";
       del.setAttribute("aria-label", `ลบรอบ ${i + 1}`);
-      del.textContent = "×";
+      del.textContent = "ลบ";
       del.disabled = !canEdit();
       del.style.visibility = canEdit() ? "visible" : "hidden";
       del.onclick = () => editRounds(() => rounds.splice(i, 1));

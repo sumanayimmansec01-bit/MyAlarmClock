@@ -262,3 +262,22 @@ test("layout fits the phone screen without sideways scroll", async ({ page }) =>
   expect(overflow).toBeLessThanOrEqual(0);
   await expect(page.locator("#startBtn")).toBeInViewport();
 });
+
+test("start fills the row, reset is small, each round has a delete button", async ({ page }) => {
+  await open(page, { rounds: [1800, 1800, 600] });
+  const u = ui(page);
+  const start = await u.start.boundingBox();
+  const reset = await u.reset.boundingBox();
+  const panel = await page.locator("section.panel").first().boundingBox();
+  expect(Math.abs(start.width - panel.width)).toBeLessThanOrEqual(1);
+  expect(reset.height).toBeLessThan(start.height / 1.5);
+  expect(reset.width).toBeLessThan(start.width / 2);
+
+  for (let i = 1; i <= 3; i++) {
+    await expect(page.getByRole("button", { name: `ลบรอบ ${i}` })).toBeVisible();
+    await expect(page.getByRole("button", { name: `ลบรอบ ${i}` })).toHaveText("ลบ");
+  }
+  await page.getByRole("button", { name: "ลบรอบ 3" }).click();
+  await expect(u.rows).toHaveCount(2);
+  await expect(u.total).toHaveText("2 รอบ • รวม 1:00:00");
+});
