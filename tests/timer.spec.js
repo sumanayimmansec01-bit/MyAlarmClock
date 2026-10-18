@@ -203,6 +203,27 @@ test.describe("running", () => {
     await page.getByRole("button", { name: "เพิ่มรอบ 5 นาที" }).click();
     await expect(u.rows).toHaveCount(2);
     await expect(u.start).toHaveText("เริ่ม");
+    // rounds that have not run yet must not be struck through
+    await expect(page.locator("#rounds .row.done")).toHaveCount(0);
+  });
+
+  test("adding a round after finishing shows it as not yet run", async ({ page }) => {
+    await open(page, { rounds: [60] });
+    const u = ui(page);
+    await u.start.click();
+    await advance(page, 1 * MIN + 500);
+    await expect(u.label).toHaveText("ครบทุกรอบแล้ว");
+    await expect(u.rows.nth(0)).toHaveClass(/done/);
+
+    await page.getByRole("button", { name: "เพิ่มรอบ 30 นาที" }).click();
+    await expect(u.rows).toHaveCount(2);
+    await expect(page.locator("#rounds .row.done")).toHaveCount(0);
+    await expect(u.rows.nth(1).locator(".m")).toHaveCSS("text-decoration-line", "none");
+    await expect(u.label).toHaveText("พร้อมเริ่ม • 2 รอบ");
+
+    await u.input.fill("15, 15");
+    await u.add.click();
+    await expect(page.locator("#rounds .row.done")).toHaveCount(0);
   });
 
   test("phone asleep past several round ends: catches up, rings once", async ({ page }) => {
