@@ -327,6 +327,16 @@
     return NaN;
   }
 
+  // Rounds can be edited before starting and after the last round has finished.
+  const canEdit = () => state === "idle" || state === "finished";
+  function editRounds(change) {
+    if (!canEdit()) return;
+    change();
+    if (state === "finished") { state = "idle"; idx = 0; }
+    save();
+    renderAll();
+  }
+
   // ---------- render ----------
   function renderList() {
     els.rounds.innerHTML = "";
@@ -348,9 +358,9 @@
       del.type = "button";
       del.setAttribute("aria-label", `ลบรอบ ${i + 1}`);
       del.textContent = "×";
-      del.disabled = state !== "idle";
-      del.style.visibility = state === "idle" ? "visible" : "hidden";
-      del.onclick = () => { rounds.splice(i, 1); save(); renderAll(); };
+      del.disabled = !canEdit();
+      del.style.visibility = canEdit() ? "visible" : "hidden";
+      del.onclick = () => editRounds(() => rounds.splice(i, 1));
       li.appendChild(del);
       els.rounds.appendChild(li);
     });
@@ -478,13 +488,13 @@
     });
   }
   renderSounds();
-  els.clearBtn.onclick = () => { rounds = []; save(); renderAll(); };
+  els.clearBtn.onclick = () => editRounds(() => { rounds = []; });
 
   [5, 10, 15, 20, 25, 30, 45, 60].forEach((m) => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "chip"; b.textContent = `+${m}`;
     b.setAttribute("aria-label", `เพิ่มรอบ ${m} นาที`);
-    b.onclick = () => { rounds.push(m * 60); save(); renderAll(); };
+    b.onclick = () => editRounds(() => rounds.push(m * 60));
     els.chips.appendChild(b);
   });
 
@@ -499,10 +509,8 @@
       return;
     }
     els.addError.hidden = true;
-    rounds.push(...vals);
-    save();
+    editRounds(() => rounds.push(...vals));
     els.addInput.value = "";
-    renderAll();
   });
 
   renderAll();
