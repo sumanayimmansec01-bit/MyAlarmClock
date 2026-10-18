@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} body{margin:0} [hidden]{display:none!important}</style>
 <title>นาฬิกาจับเวลาหลายรอบ</title>
+<title>นาฬิกาจับเวลาหลายรอบ</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -104,6 +105,12 @@
   .empty { color: var(--muted); font-size: .9rem; margin: 0; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sounds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sound { font: inherit; font-weight: 500; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; }
+  .sound::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+  .sound[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .sound[aria-checked="true"]::before { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px var(--accent-soft); }
+  .sound:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .chip { font: inherit; font-weight: 500; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; font-variant-numeric: tabular-nums; }
   .chip:active { background: var(--accent-soft); }
 
@@ -167,6 +174,14 @@
     </div>
   </section>
 
+  <section class="panel">
+    <div class="panel-head">
+      <h2>เสียงเตือน</h2>
+      <span class="total">แตะเพื่อฟังตัวอย่าง</span>
+    </div>
+    <div class="sounds" id="sounds" role="radiogroup" aria-label="เลือกเสียงเตือน"></div>
+  </section>
+
   <p class="note">ครบแต่ละรอบจะมีเสียงเตือน 1 ครั้ง แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง<br>ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้</p>
 </div>
 
@@ -178,7 +193,7 @@
     dial: $("dial"), prog: $("prog"), roundLabel: $("roundLabel"), time: $("time"), endAt: $("endAt"),
     startBtn: $("startBtn"), resetBtn: $("resetBtn"), rounds: $("rounds"), total: $("total"),
     chips: $("chips"), addForm: $("addForm"), addInput: $("addInput"), addError: $("addError"),
-    clearBtn: $("clearBtn"), testSound: $("testSound"),
+    clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"),
   };
   const CIRC = 2 * Math.PI * 52;
   els.prog.style.strokeDasharray = CIRC;
@@ -208,23 +223,62 @@
     if (ctx && ctx.state === "suspended") ctx.resume();
     return ctx;
   }
-  // One alert: a short two-note chime, about 1.5 seconds, played once.
-  function chime() {
+  // Each sound is one alert. Bells use inharmonic partials with a long natural decay.
+  const SOUNDS = {
+    temple: { label: "ระฆังวัด", partials: [[0.5, 0.5, 10], [1, 1, 8.5], [1.183, 0.6, 6.5], [1.506, 0.45, 5], [2, 0.35, 4], [2.514, 0.25, 3], [2.662, 0.2, 2.6], [3.011, 0.12, 2]], base: 196, strike: 0.004 },
+    bell:   { label: "ระฆังเล็ก", partials: [[0.56, 0.4, 4.5], [0.92, 0.5, 3.6], [1, 1, 4], [1.19, 0.6, 3], [1.71, 0.45, 2.4], [2, 0.35, 2], [2.74, 0.25, 1.6], [3, 0.2, 1.3], [3.76, 0.12, 1]], base: 660, strike: 0.002 },
+    chime:  { label: "กริ๊ง 2 โน้ต", notes: [[880, 0], [1318.5, 0.28]] },
+    beep:   { label: "บี๊บดิจิทัล", beeps: [0, 0.18, 0.36] },
+  };
+  let soundKey = "temple";
+  try { const k = localStorage.getItem(STORE_KEY + ":sound"); if (k && SOUNDS[k]) soundKey = k; } catch (_) {}
+
+  function tone(ac, out, freq, start, peak, decay, attack, type = "sine") {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak, start + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + decay);
+    osc.connect(g).connect(out);
+    osc.start(start);
+    osc.stop(start + decay + 0.05);
+  }
+
+  function chime(key = soundKey) {
     const ac = audio();
+    const snd = SOUNDS[key] || SOUNDS.temple;
     if (ac) {
       const t0 = ac.currentTime + 0.05;
-      [[880, 0], [1318.5, 0.28]].forEach(([freq, off]) => {
-        const osc = ac.createOscillator();
-        const gain = ac.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.0001, t0 + off);
-        gain.gain.exponentialRampToValueAtTime(0.9, t0 + off + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 1.2);
-        osc.connect(gain).connect(ac.destination);
-        osc.start(t0 + off);
-        osc.stop(t0 + off + 1.25);
-      });
+      const out = ac.createGain();
+      out.connect(ac.destination);
+      if (snd.partials) {
+        // scale so the summed partials stay loud without clipping
+        const sum = snd.partials.reduce((a, [, amp]) => a + amp, 0) * 1.5;
+        out.gain.value = 1.4 / sum;
+        snd.partials.forEach(([ratio, amp, decay]) => {
+          tone(ac, out, snd.base * ratio, t0, amp, decay, snd.strike);
+          // a slightly detuned twin gives the slow shimmer of a real bell
+          tone(ac, out, snd.base * ratio * 1.003, t0, amp * 0.5, decay * 0.9, snd.strike);
+        });
+        // short noisy click for the strike of the mallet
+        const len = Math.floor(ac.sampleRate * 0.03);
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const src = ac.createBufferSource();
+        const hp = ac.createBiquadFilter();
+        const ng = ac.createGain();
+        hp.type = "highpass"; hp.frequency.value = 2000; ng.gain.value = 0.25;
+        src.buffer = buf;
+        src.connect(hp).connect(ng).connect(out);
+        src.start(t0);
+      } else if (snd.notes) {
+        snd.notes.forEach(([f, off]) => tone(ac, out, f, t0 + off, 0.9, 1.2, 0.02));
+      } else {
+        snd.beeps.forEach((off) => tone(ac, out, 1760, t0 + off, 0.35, 0.12, 0.005, "square"));
+      }
     }
     try { navigator.vibrate && navigator.vibrate([400, 150, 400]); } catch (_) {}
   }
@@ -404,7 +458,26 @@
   // ---------- events ----------
   els.startBtn.onclick = () => (state === "running" ? pause() : start());
   els.resetBtn.onclick = reset;
-  els.testSound.onclick = chime;
+  els.testSound.onclick = () => chime();
+
+  function renderSounds() {
+    els.sounds.innerHTML = "";
+    Object.entries(SOUNDS).forEach(([key, snd]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "sound"; b.id = "sound-" + key;
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(key === soundKey));
+      b.textContent = snd.label;
+      b.onclick = () => {
+        soundKey = key;
+        try { localStorage.setItem(STORE_KEY + ":sound", key); } catch (_) {}
+        renderSounds();
+        chime(key);
+      };
+      els.sounds.appendChild(b);
+    });
+  }
+  renderSounds();
   els.clearBtn.onclick = () => { rounds = []; save(); renderAll(); };
 
   [5, 10, 15, 20, 25, 30, 45, 60].forEach((m) => {
