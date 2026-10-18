@@ -281,3 +281,21 @@ test("start fills the row, reset is small, each round has a delete button", asyn
   await expect(u.rows).toHaveCount(2);
   await expect(u.total).toHaveText("2 รอบ • รวม 1:00:00");
 });
+
+test("pause and resume buttons use different colours from start and each other", async ({ page }) => {
+  await open(page, { rounds: [600] });
+  const u = ui(page);
+  const bg = () => u.start.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const startColour = await bg();
+  await u.start.click();
+  await expect(u.start).toHaveText("หยุดชั่วคราว");
+  const pauseColour = await bg();
+  await u.start.click();
+  await expect(u.start).toHaveText("ทำต่อ");
+  const resumeColour = await bg();
+  expect(new Set([startColour, pauseColour, resumeColour]).size).toBe(3);
+  await u.start.click();
+  expect(await bg()).toBe(pauseColour);
+  await u.reset.click();
+  expect(await bg()).toBe(startColour);
+});

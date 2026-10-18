@@ -30,6 +30,10 @@
     --done: #2e8a5a;
     --track: #dfe5ee;
     --danger: #c0392b;
+    --pause: #b8660c;
+    --pause-fg: #ffffff;
+    --resume: #2e8a5a;
+    --resume-fg: #ffffff;
     --font-display: "Chakra Petch", "IBM Plex Sans Thai", system-ui, sans-serif;
     --font-body: "IBM Plex Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -37,12 +41,14 @@
     :root:not([data-theme="light"]) {
       --bg: #10161e; --surface: #18212c; --fg: #e6ecf3; --muted: #93a2b3; --line: #2a3644;
       --accent: #7ea2ff; --accent-soft: #1f2c47; --done: #5cc58f; --track: #25303d; --danger: #ff8a7a;
+      --pause: #f0a640; --pause-fg: #1a1206; --resume: #5cc58f; --resume-fg: #08190f;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
     --bg: #10161e; --surface: #18212c; --fg: #e6ecf3; --muted: #93a2b3; --line: #2a3644;
     --accent: #7ea2ff; --accent-soft: #1f2c47; --done: #5cc58f; --track: #25303d; --danger: #ff8a7a;
+    --pause: #f0a640; --pause-fg: #1a1206; --resume: #5cc58f; --resume-fg: #08190f;
     color-scheme: dark;
   }
 
@@ -79,6 +85,9 @@
   /* Controls */
   .controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .controls .btn.primary { width: 100%; font-size: 1.15rem; padding: 18px; }
+  /* running shows an amber Pause, paused shows a green Resume */
+  #startBtn[data-action="pause"] { background: var(--pause); border-color: var(--pause); color: var(--pause-fg); }
+  #startBtn[data-action="resume"] { background: var(--resume); border-color: var(--resume); color: var(--resume-fg); }
   .reset-btn { font-size: .85rem; padding: 6px 16px; }
   .reset-btn:disabled { opacity: .4; cursor: default; }
   .btn {
@@ -407,6 +416,7 @@
   function renderButtons() {
     document.body.classList.toggle("running", state === "running" || state === "paused");
     els.startBtn.disabled = !rounds.length;
+    els.startBtn.dataset.action = state === "running" ? "pause" : state === "paused" ? "resume" : "start";
     els.startBtn.textContent = state === "running" ? "หยุดชั่วคราว" : state === "paused" ? "ทำต่อ" : state === "finished" ? "เริ่มใหม่" : "เริ่ม";
     els.resetBtn.disabled = state === "idle";
   }
