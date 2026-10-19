@@ -240,44 +240,21 @@ test.describe("running", () => {
 });
 
 test.describe("sound", () => {
-  test("small bell is the default and the temple bell is gone", async ({ page }) => {
+  test("two-note chime is the default and only chime and beep remain", async ({ page }) => {
     await open(page);
-    await expect(page.getByRole("radio")).toHaveText(["ระฆังเล็ก", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
-    await expect(page.getByRole("radio", { name: "ระฆังเล็ก" })).toHaveAttribute("aria-checked", "true");
-    await page.getByRole("radio", { name: "กริ๊ง 2 โน้ต" }).click();
+    await expect(page.getByRole("radio")).toHaveText(["กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
     await expect(page.getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
-    await expect(page.getByRole("radio", { name: "ระฆังเล็ก" })).toHaveAttribute("aria-checked", "false");
+    await page.getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
+    await expect(page.getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
     expect(await alerts(page)).toBe(1);
   });
 
-  test("a saved temple-bell choice falls back to the small bell", async ({ page }) => {
-    await open(page, { sound: "temple" });
-    await expect(page.getByRole("radio", { name: "ระฆังเล็ก" })).toHaveAttribute("aria-checked", "true");
-  });
-
-  test("small bell rings for about 4 seconds without clipping", async ({ page }) => {
-    // Route the app's audio into an offline context so the bell can be measured.
-    await page.addInitScript(() => {
-      window.__off = new OfflineAudioContext(1, 44100 * 10, 44100);
-      window.__off.resume = () => Promise.resolve();
-      window.AudioContext = function () { return window.__off; };
+  for (const removed of ["temple", "bell"]) {
+    test(`a saved "${removed}" choice falls back to the chime`, async ({ page }) => {
+      await open(page, { sound: removed });
+      await expect(page.getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
     });
-    await open(page);
-    const { peak, seconds } = await page.evaluate(async () => {
-      document.getElementById("sound-bell").click();
-      const d = (await window.__off.startRendering()).getChannelData(0);
-      let peak = 0, last = 0;
-      for (let i = 0; i < d.length; i++) {
-        const a = Math.abs(d[i]);
-        if (a > peak) peak = a;
-        if (a > 0.01) last = i; // still clearly audible (louder than -40 dB)
-      }
-      return { peak, seconds: last / 44100 };
-    });
-    expect(peak).toBeLessThanOrEqual(1);
-    expect(seconds).toBeGreaterThanOrEqual(3.7);
-    expect(seconds).toBeLessThanOrEqual(4.5);
-  });
+  }
 
   test("test-sound button plays the chosen sound", async ({ page }) => {
     await open(page);

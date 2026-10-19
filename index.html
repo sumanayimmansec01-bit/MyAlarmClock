@@ -195,7 +195,7 @@
     <div class="sounds" id="sounds" role="radiogroup" aria-label="เลือกเสียงเตือน"></div>
   </section>
 
-  <p class="note">ครบแต่ละรอบจะมีเสียงเตือน 1 ครั้ง แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง<br>ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้</p>
+  <p class="note"><b>มือถือ Android:</b> ใช้แอพ Android แทนจะดีกว่า ดังแม้ปิดเสียงมือถือและล็อกจอ ไม่กินแบต <a href="https://github.com/sumanayimmansec01-bit/MyAlarmClock/releases/tag/android-latest" style="color:var(--accent)">ดาวน์โหลดแอพ</a><br>ครบแต่ละรอบจะมีเสียงเตือน 1 ครั้ง แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง<br>ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้</p>
 </div>
 
 <script>
@@ -236,13 +236,12 @@
     if (ctx && ctx.state === "suspended") ctx.resume();
     return ctx;
   }
-  // Each sound is one alert. Bells use inharmonic partials with a long natural decay.
+  // Each sound is one short alert.
   const SOUNDS = {
-    bell:   { label: "ระฆังเล็ก", partials: [[0.56, 0.4, 10], [0.92, 0.5, 8], [1, 1, 9], [1.19, 0.6, 6.7], [1.71, 0.45, 5.3], [2, 0.35, 4.5], [2.74, 0.25, 3.6], [3, 0.2, 3], [3.76, 0.12, 2.2]], base: 660, strike: 0.002 },
     chime:  { label: "กริ๊ง 2 โน้ต", notes: [[880, 0], [1318.5, 0.28]] },
     beep:   { label: "บี๊บดิจิทัล", beeps: [0, 0.18, 0.36] },
   };
-  let soundKey = "bell";
+  let soundKey = "chime";
   try { const k = localStorage.getItem(STORE_KEY + ":sound"); if (k && SOUNDS[k]) soundKey = k; } catch (_) {}
 
   function tone(ac, out, freq, start, peak, decay, attack, type = "sine") {
@@ -260,33 +259,12 @@
 
   function chime(key = soundKey) {
     const ac = audio();
-    const snd = SOUNDS[key] || SOUNDS.bell;
+    const snd = SOUNDS[key] || SOUNDS.chime;
     if (ac) {
       const t0 = ac.currentTime + 0.05;
       const out = ac.createGain();
       out.connect(ac.destination);
-      if (snd.partials) {
-        // scale so the summed partials stay loud without clipping
-        const sum = snd.partials.reduce((a, [, amp]) => a + amp, 0) * 1.5;
-        out.gain.value = 1.4 / sum;
-        snd.partials.forEach(([ratio, amp, decay]) => {
-          tone(ac, out, snd.base * ratio, t0, amp, decay, snd.strike);
-          // a slightly detuned twin gives the slow shimmer of a real bell
-          tone(ac, out, snd.base * ratio * 1.003, t0, amp * 0.5, decay * 0.9, snd.strike);
-        });
-        // short noisy click for the strike of the mallet
-        const len = Math.floor(ac.sampleRate * 0.03);
-        const buf = ac.createBuffer(1, len, ac.sampleRate);
-        const d = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-        const src = ac.createBufferSource();
-        const hp = ac.createBiquadFilter();
-        const ng = ac.createGain();
-        hp.type = "highpass"; hp.frequency.value = 2000; ng.gain.value = 0.25;
-        src.buffer = buf;
-        src.connect(hp).connect(ng).connect(out);
-        src.start(t0);
-      } else if (snd.notes) {
+      if (snd.notes) {
         snd.notes.forEach(([f, off]) => tone(ac, out, f, t0 + off, 0.9, 1.2, 0.02));
       } else {
         snd.beeps.forEach((off) => tone(ac, out, 1760, t0 + off, 0.35, 0.12, 0.005, "square"));
