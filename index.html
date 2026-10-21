@@ -136,6 +136,9 @@
   .hint { font-size: .82rem; color: var(--muted); margin: 0; }
   .error { color: var(--danger); font-size: .85rem; margin: 0; }
 
+  .wake { align-self: center; font: inherit; font-size: .85rem; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: default; }
+  .wake[data-state="denied"], .wake[data-state="unsupported"] { color: var(--pause); border-color: var(--pause); }
+  .wake[data-state="denied"] { cursor: pointer; }
   .note { font-size: .82rem; color: var(--muted); margin: 0; text-align: center; }
 
   body.running .setup-only { opacity: .5; pointer-events: none; }
@@ -162,6 +165,8 @@
       <div class="end-at" id="endAt"></div>
     </div>
   </div>
+
+  <button class="wake" id="wake" type="button" hidden></button>
 
   <div class="controls">
     <button class="btn primary" id="startBtn" type="button">เริ่ม</button>
@@ -206,7 +211,7 @@
     dial: $("dial"), prog: $("prog"), roundLabel: $("roundLabel"), time: $("time"), endAt: $("endAt"),
     startBtn: $("startBtn"), resetBtn: $("resetBtn"), rounds: $("rounds"), total: $("total"),
     chips: $("chips"), addForm: $("addForm"), addInput: $("addInput"), addError: $("addError"),
-    clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"),
+    clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"), wake: $("wake"),
   };
   const CIRC = 2 * Math.PI * 52;
   els.prog.style.strokeDasharray = CIRC;
@@ -274,14 +279,47 @@
   }
 
   // ---------- wake lock ----------
+  // wakeState: "off" (not needed), "on", "denied" (phone refused) or "unsupported"
   let wakeLock = null;
+  let wakeState = "off";
   async function lockScreen() {
-    try { if ("wakeLock" in navigator && !wakeLock) {
-      wakeLock = await navigator.wakeLock.request("screen");
-      wakeLock.addEventListener("release", () => { wakeLock = null; });
-    } } catch (_) { wakeLock = null; }
+    if (!("wakeLock" in navigator)) { wakeState = "unsupported"; renderWake(); return; }
+    if (wakeLock) return;
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      if (state !== "running") { lock.release(); return; }
+      wakeLock = lock;
+      wakeState = "on";
+      lock.addEventListener("release", () => {
+        if (wakeLock !== lock) return; // released on purpose
+        wakeLock = null;
+        // The phone dropped the lock (e.g. battery saver); ask again while the page is in front.
+        if (state === "running" && document.visibilityState === "visible") lockScreen();
+        else { wakeState = state === "running" ? "denied" : "off"; renderWake(); }
+      });
+    } catch (_) {
+      wakeLock = null;
+      wakeState = "denied";
+    }
+    renderWake();
   }
-  function unlockScreen() { try { wakeLock && wakeLock.release(); } catch (_) {} wakeLock = null; }
+  function unlockScreen() {
+    const lock = wakeLock;
+    wakeLock = null;
+    wakeState = "off";
+    try { lock && lock.release(); } catch (_) {}
+    renderWake();
+  }
+  function renderWake() {
+    const el = els.wake;
+    el.hidden = state !== "running" || wakeState === "off";
+    el.dataset.state = wakeState;
+    el.textContent = wakeState === "on"
+      ? "🔆 กันจอดับอยู่ วางมือถือไว้ได้เลย"
+      : wakeState === "unsupported"
+        ? "⚠️ เบราว์เซอร์นี้กันจอดับไม่ได้ ตั้งเวลาปิดหน้าจอของมือถือให้นานกว่ารอบ"
+        : "⚠️ มือถือไม่อนุญาตให้กันจอดับ แตะเพื่อลองอีกครั้ง";
+  }
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       if (state === "running") { lockScreen(); tick(); }
@@ -398,7 +436,7 @@
     els.resetBtn.disabled = state === "idle";
   }
 
-  function renderAll() { renderList(); renderDial(); renderButtons(); }
+  function renderAll() { renderList(); renderDial(); renderButtons(); renderWake(); }
 
   // ---------- engine ----------
   function tick() {
@@ -459,6 +497,7 @@
   // ---------- events ----------
   els.startBtn.onclick = () => (state === "running" ? pause() : start());
   els.resetBtn.onclick = reset;
+  els.wake.onclick = () => { if (wakeState === "denied") lockScreen(); };
   els.testSound.onclick = () => chime();
 
   function renderSounds() {

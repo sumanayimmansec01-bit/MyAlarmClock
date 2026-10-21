@@ -306,3 +306,95 @@ test("pause and resume buttons use different colours from start and each other",
   await u.reset.click();
   expect(await bg()).toBe(startColour);
 });
+
+test.describe("screen stays on", () => {
+  // Fake Screen Wake Lock so each phone behaviour can be reproduced.
+  async function fakeWakeLock(page, mode) {
+    await page.addInitScript((mode) => {
+      window.__locks = { requested: 0, active: 0, last: null };
+      if (mode === "unsupported") { delete Navigator.prototype.wakeLock; return; }
+      const api = {
+        async request() {
+          __locks.requested++;
+          if (mode === "denied" || (mode === "deny-once" && __locks.requested === 1)) {
+            throw new DOMException("not allowed", "NotAllowedError");
+          }
+          const lock = new EventTarget();
+          lock.released = false;
+          lock.release = async () => {
+            if (lock.released) return;
+            lock.released = true;
+            __locks.active--;
+            lock.dispatchEvent(new Event("release"));
+          };
+          __locks.active++;
+          __locks.last = lock;
+          return lock;
+        },
+      };
+      Object.defineProperty(Navigator.prototype, "wakeLock", { get: () => api, configurable: true });
+    }, mode);
+  }
+  const wake = (page) => page.locator("#wake");
+  const locks = (page) => page.evaluate(() => ({ ...window.__locks, last: undefined }));
+
+  test("keeps the screen on while running and lets it sleep after", async ({ page }) => {
+    await fakeWakeLock(page, "granted");
+    await open(page, { rounds: [60, 60] });
+    const u = ui(page);
+    await expect(wake(page)).toBeHidden();
+    await u.start.click();
+    await expect(wake(page)).toHaveText(/กันจอดับอยู่/);
+    expect((await locks(page)).active).toBe(1);
+
+    await u.start.click(); // pause
+    await expect(wake(page)).toBeHidden();
+    expect((await locks(page)).active).toBe(0);
+
+    await u.start.click(); // resume
+    await expect(wake(page)).toHaveText(/กันจอดับอยู่/);
+    await advance(page, 2 * MIN + 500);
+    await expect(u.label).toHaveText("ครบทุกรอบแล้ว");
+    await expect(wake(page)).toBeHidden();
+    expect((await locks(page)).active).toBe(0);
+  });
+
+  test("asks again when the phone drops the lock mid-session", async ({ page }) => {
+    await fakeWakeLock(page, "granted");
+    await open(page, { rounds: [1800] });
+    await ui(page).start.click();
+    await expect(wake(page)).toHaveText(/กันจอดับอยู่/);
+    await page.evaluate(() => window.__locks.last.release()); // e.g. battery saver
+    await expect.poll(async () => (await locks(page)).requested).toBe(2);
+    expect((await locks(page)).active).toBe(1);
+    await expect(wake(page)).toHaveText(/กันจอดับอยู่/);
+  });
+
+  test("warns when the phone refuses and retries on tap", async ({ page }) => {
+    await fakeWakeLock(page, "deny-once");
+    await open(page, { rounds: [1800] });
+    await ui(page).start.click();
+    await expect(wake(page)).toHaveText(/ไม่อนุญาตให้กันจอดับ/);
+    await wake(page).click();
+    await expect(wake(page)).toHaveText(/กันจอดับอยู่/);
+    expect((await locks(page)).active).toBe(1);
+  });
+
+  test("tells the user when the browser has no wake lock", async ({ page }) => {
+    await fakeWakeLock(page, "unsupported");
+    await open(page, { rounds: [1800] });
+    await ui(page).start.click();
+    await expect(wake(page)).toHaveText(/เบราว์เซอร์นี้กันจอดับไม่ได้/);
+    await expect(ui(page).label).toHaveText("รอบ 1 จาก 1");
+  });
+
+  test("reset releases the lock", async ({ page }) => {
+    await fakeWakeLock(page, "granted");
+    await open(page, { rounds: [1800] });
+    await ui(page).start.click();
+    await expect(wake(page)).toBeVisible();
+    await ui(page).reset.click();
+    await expect(wake(page)).toBeHidden();
+    expect((await locks(page)).active).toBe(0);
+  });
+});
