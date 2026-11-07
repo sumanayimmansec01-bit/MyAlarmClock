@@ -104,7 +104,7 @@ test.describe("setup", () => {
 
   test("remembers rounds and sound after reload", async ({ page }) => {
     await open(page, { rounds: [] });
-    await page.getByRole("button", { name: "เพิ่มรอบ 10 นาที" }).click();
+    await page.getByRole("button", { name: "เพิ่มรอบ 20 นาที" }).click();
     await page.getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
     await page.reload();
     await expect(ui(page).rows).toHaveCount(1);
@@ -200,7 +200,7 @@ test.describe("running", () => {
     await expect(u.rows).toHaveCount(1);
     await expect(u.label).toHaveText("พร้อมเริ่ม • 1 รอบ");
     await expect(u.time).toHaveText("01:00");
-    await page.getByRole("button", { name: "เพิ่มรอบ 5 นาที" }).click();
+    await page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click();
     await expect(u.rows).toHaveCount(2);
     await expect(u.start).toHaveText("เริ่ม");
     // rounds that have not run yet must not be struck through
@@ -397,4 +397,11 @@ test.describe("screen stays on", () => {
     await expect(wake(page)).toBeHidden();
     expect((await locks(page)).active).toBe(0);
   });
+});
+
+test("quick-add buttons are 15, 20, 30, 40, 45, 60 minutes", async ({ page }) => {
+  await open(page, { rounds: [] });
+  await expect(page.locator("#chips .chip")).toHaveText(["+15", "+20", "+30", "+40", "+45", "+60"]);
+  await page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click();
+  await expect(ui(page).rows.nth(0)).toContainText("40 นาที");
 });

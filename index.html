@@ -117,7 +117,7 @@
   .row.done .n::after { content: " ✓"; color: var(--done); }
   .empty { color: var(--muted); font-size: .9rem; margin: 0; }
 
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .sounds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .sound { font: inherit; font-weight: 500; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; }
   .sound::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
@@ -520,7 +520,7 @@
   renderSounds();
   els.clearBtn.onclick = () => editRounds(() => { rounds = []; });
 
-  [5, 10, 15, 20, 25, 30, 45, 60].forEach((m) => {
+  [15, 20, 30, 40, 45, 60].forEach((m) => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "chip"; b.textContent = `+${m}`;
     b.setAttribute("aria-label", `เพิ่มรอบ ${m} นาที`);
