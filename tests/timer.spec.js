@@ -4,17 +4,27 @@ const { test, expect } = require("@playwright/test");
 const MIN = 60_000;
 
 // Every alert also vibrates, so counting vibrate() calls counts alerts.
-async function open(page, { rounds, sound } = {}) {
+// Oscillator starts are recorded too, so tests can tell which sound played.
+// Unless a test asks otherwise, the countdown and the dim screen are switched
+// off so the timing tests below see round 1 start at once.
+async function open(page, { rounds, sound, settings = { prep: 0, dim: false } } = {}) {
   await page.clock.install({ time: new Date("2026-10-18T09:00:00+07:00") });
-  await page.addInitScript(({ rounds, sound }) => {
+  await page.addInitScript(({ rounds, sound, settings }) => {
     window.__alerts = 0;
+    window.__tones = [];
     navigator.vibrate = () => { window.__alerts++; return true; };
+    const start = OscillatorNode.prototype.start;
+    OscillatorNode.prototype.start = function (...args) {
+      window.__tones.push({ freq: this.frequency.value, type: this.type });
+      return start.apply(this, args);
+    };
     // seed storage on the first load only, so reload tests see what the app saved
     if (sessionStorage.getItem("seeded")) return;
     sessionStorage.setItem("seeded", "1");
     if (rounds) localStorage.setItem("multi-round-timer:v1", JSON.stringify(rounds));
     if (sound) localStorage.setItem("multi-round-timer:v1:sound", sound);
-  }, { rounds, sound });
+    if (settings) localStorage.setItem("multi-round-timer:v1:settings", JSON.stringify(settings));
+  }, { rounds, sound, settings });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/index.html");
@@ -105,10 +115,10 @@ test.describe("setup", () => {
   test("remembers rounds and sound after reload", async ({ page }) => {
     await open(page, { rounds: [] });
     await page.getByRole("button", { name: "เพิ่มรอบ 20 นาที" }).click();
-    await page.getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
+    await page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
     await page.reload();
     await expect(ui(page).rows).toHaveCount(1);
-    await expect(page.getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
   });
 });
 
@@ -240,19 +250,19 @@ test.describe("running", () => {
 });
 
 test.describe("sound", () => {
-  test("two-note chime is the default and only chime and beep remain", async ({ page }) => {
+  test("two-note chime is the default; bowl, wood, chime and beep are offered", async ({ page }) => {
     await open(page);
-    await expect(page.getByRole("radio")).toHaveText(["กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
-    await expect(page.getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
-    await page.getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
-    await expect(page.getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#sounds [role=radio]")).toHaveText(["ขันทิเบต (นุ่ม)", "ไม้เคาะ (นุ่ม)", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
+    await expect(page.locator("#sounds").getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
+    await page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
+    await expect(page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
     expect(await alerts(page)).toBe(1);
   });
 
   for (const removed of ["temple", "bell"]) {
     test(`a saved "${removed}" choice falls back to the chime`, async ({ page }) => {
       await open(page, { sound: removed });
-      await expect(page.getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
+      await expect(page.locator("#sounds").getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
     });
   }
 
@@ -404,4 +414,182 @@ test("quick-add buttons are 15, 20, 30, 40, 45, 60 minutes", async ({ page }) =>
   await expect(page.locator("#chips .chip")).toHaveText(["+15", "+20", "+30", "+40", "+45", "+60"]);
   await page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click();
   await expect(ui(page).rows.nth(0)).toContainText("40 นาที");
+});
+
+test.describe("countdown before the first round", () => {
+  test("counts down, then starts round 1 without an alert", async ({ page }) => {
+    await open(page, { rounds: [1800, 1800], settings: { prep: 10, dim: false } });
+    const u = ui(page);
+    await u.start.click();
+    await expect(u.label).toHaveText("เตรียมตัว จัดท่านั่ง");
+    await expect(u.time).toHaveText("00:10");
+    await expect(u.start).toHaveText("ข้าม เริ่มรอบแรกเลย");
+    await expect(page.getByRole("button", { name: "ลบรอบ 1" })).toBeHidden();
+
+    await page.clock.runFor(10_300);
+    await expect(u.label).toHaveText("รอบ 1 จาก 2");
+    await expect(u.time).toHaveText("30:00");
+    expect(await alerts(page)).toBe(0);
+    // round 1 ends 30 minutes after the countdown, not after the tap
+    await expect(u.endAt).toContainText("09:30");
+  });
+
+  test("skip starts round 1 straight away", async ({ page }) => {
+    await open(page, { rounds: [600], settings: { prep: 30, dim: false } });
+    const u = ui(page);
+    await u.start.click();
+    await page.clock.runFor(5_000);
+    await u.start.click();
+    await expect(u.label).toHaveText("รอบ 1 จาก 1");
+    await expect(u.time).toHaveText("10:00");
+    await expect(u.start).toHaveText("หยุดชั่วคราว");
+  });
+
+  test("reset during the countdown goes back to ready", async ({ page }) => {
+    await open(page, { rounds: [600], settings: { prep: 20, dim: false } });
+    const u = ui(page);
+    await u.start.click();
+    await u.reset.click();
+    await expect(u.label).toHaveText("พร้อมเริ่ม • 1 รอบ");
+    await page.clock.runFor(30_000);
+    await expect(u.label).toHaveText("พร้อมเริ่ม • 1 รอบ");
+  });
+
+  test("the choice is remembered", async ({ page }) => {
+    await open(page, { rounds: [600], settings: null });
+    await expect(page.locator("#preps").getByRole("radio", { name: "10 วิ" })).toHaveAttribute("aria-checked", "true");
+    await page.locator("#preps").getByRole("radio", { name: "ไม่มี" }).click();
+    await page.reload();
+    await expect(page.locator("#preps").getByRole("radio", { name: "ไม่มี" })).toHaveAttribute("aria-checked", "true");
+  });
+});
+
+test.describe("dim screen", () => {
+  const dim = (page) => page.locator("#dim");
+
+  test("goes black with a faint clock while timing; tap shows the controls", async ({ page }) => {
+    await open(page, { rounds: [600, 600], settings: { prep: 10, dim: true } });
+    const u = ui(page);
+    await expect(dim(page)).toBeHidden();
+    await u.start.click();
+    await expect(dim(page)).toBeVisible();
+    await expect(page.locator("#dimLabel")).toHaveText("เตรียมตัว");
+    await page.clock.runFor(10_300);
+    await expect(page.locator("#dimLabel")).toHaveText("รอบ 1 จาก 2");
+    await expect(page.locator("#dimTime")).toHaveText("10:00");
+
+    await dim(page).click();
+    await expect(dim(page)).toBeHidden();
+    await expect(u.start).toHaveText("หยุดชั่วคราว");
+    await page.clock.runFor(16_000); // left alone, it dims again
+    await expect(dim(page)).toBeVisible();
+
+    await dim(page).click();
+    await u.start.click(); // pause
+    await expect(dim(page)).toBeHidden();
+    await page.clock.runFor(20_000);
+    await expect(dim(page)).toBeHidden();
+  });
+
+  test("lifts when the last round finishes", async ({ page }) => {
+    await open(page, { rounds: [60], settings: { prep: 0, dim: true } });
+    await ui(page).start.click();
+    await expect(dim(page)).toBeVisible();
+    await advance(page, 1 * MIN + 500);
+    await expect(dim(page)).toBeHidden();
+    await expect(ui(page).label).toHaveText("ครบทุกรอบแล้ว");
+  });
+
+  test("can be switched off", async ({ page }) => {
+    await open(page, { rounds: [600], settings: null });
+    await expect(page.locator("#dimToggle")).toBeChecked();
+    await page.locator("#dimToggle").uncheck();
+    await page.locator("#preps").getByRole("radio", { name: "ไม่มี" }).click();
+    await ui(page).start.click();
+    await expect(dim(page)).toBeHidden();
+  });
+});
+
+test.describe("alert sounds", () => {
+  const tones = (page) => page.evaluate(() => window.__tones.splice(0));
+
+  test("the last round uses its own sound", async ({ page }) => {
+    await open(page, { rounds: [60, 60], sound: "chime", settings: { prep: 0, dim: false, finalSound: "bowl" } });
+    await ui(page).start.click();
+    await tones(page);
+    await advance(page, 1 * MIN + 500);
+    expect((await tones(page)).map((t) => t.freq)).toContain(880); // chime after round 1
+    await advance(page, 1 * MIN);
+    const last = (await tones(page)).map((t) => t.freq);
+    expect(last).toContain(262); // singing bowl after the last round
+    expect(last).not.toContain(880);
+    expect(await alerts(page)).toBe(2);
+  });
+
+  test("'same as other rounds' reuses the round sound", async ({ page }) => {
+    await open(page, { rounds: [60], sound: "beep", settings: { prep: 0, dim: false, finalSound: "same" } });
+    await ui(page).start.click();
+    await tones(page);
+    await advance(page, 1 * MIN + 500);
+    const last = await tones(page);
+    expect(last.every((t) => t.type === "square" && t.freq === 1760)).toBe(true);
+  });
+
+  test("final sound defaults to the singing bowl and is remembered", async ({ page }) => {
+    await open(page, { settings: null });
+    const final = page.locator("#finalSounds");
+    await expect(final.getByRole("radio")).toHaveText(["เหมือนรอบอื่น", "ขันทิเบต (นุ่ม)", "ไม้เคาะ (นุ่ม)", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
+    await expect(final.getByRole("radio", { name: "ขันทิเบต (นุ่ม)" })).toHaveAttribute("aria-checked", "true");
+    await final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)" }).click();
+    await page.reload();
+    await expect(final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  for (const key of ["bowl", "wood", "chime", "beep"]) {
+    for (const length of [2, 10]) {
+      test(`${key} rings for about ${length} s when set to ${length} s`, async ({ page }) => {
+        // Route the app's audio into an offline context so the alert can be measured.
+        await page.addInitScript((len) => {
+          window.__off = new OfflineAudioContext(1, 44100 * (len + 6), 44100);
+          window.__off.resume = () => Promise.resolve();
+          window.AudioContext = function () { return window.__off; };
+        }, length);
+        await open(page, { sound: key, settings: { prep: 0, dim: false, length } });
+        const { peak, seconds } = await page.evaluate(async () => {
+          document.getElementById("testSound").click();
+          const d = (await window.__off.startRendering()).getChannelData(0);
+          let peak = 0, last = 0;
+          for (let i = 0; i < d.length; i++) {
+            const a = Math.abs(d[i]);
+            if (a > peak) peak = a;
+            if (a > 0.01) last = i; // still clearly audible (louder than -40 dB)
+          }
+          return { peak, seconds: last / 44100 };
+        });
+        expect(peak).toBeLessThanOrEqual(1);
+        expect(seconds).toBeGreaterThanOrEqual(length * 0.85);
+        expect(seconds).toBeLessThanOrEqual(length * 1.1);
+      });
+    }
+  }
+
+  test("length choice is remembered", async ({ page }) => {
+    await open(page, { settings: null });
+    const lengths = page.locator("#lengths");
+    await expect(lengths.getByRole("radio")).toHaveText(["2 วิ", "4 วิ", "6 วิ", "10 วิ", "15 วิ", "20 วิ"]);
+    await expect(lengths.getByRole("radio", { name: "4 วิ" })).toHaveAttribute("aria-checked", "true");
+    await lengths.getByRole("radio", { name: "15 วิ" }).click();
+    await page.reload();
+    await expect(lengths.getByRole("radio", { name: "15 วิ" })).toHaveAttribute("aria-checked", "true");
+  });
+});
+
+test("dim screen repeats the warning when the screen may turn off", async ({ page }) => {
+  await page.addInitScript(() => {
+    const api = { async request() { throw new DOMException("no", "NotAllowedError"); } };
+    Object.defineProperty(Navigator.prototype, "wakeLock", { get: () => api, configurable: true });
+  });
+  await open(page, { rounds: [600], settings: { prep: 0, dim: true } });
+  await ui(page).start.click();
+  await expect(page.locator("#dimHint")).toHaveText(/จออาจดับเอง/);
 });

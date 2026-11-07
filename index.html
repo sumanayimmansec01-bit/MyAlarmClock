@@ -143,6 +143,31 @@
 
   body.running .setup-only { opacity: .5; pointer-events: none; }
 
+  .sub { margin: 4px 0 -4px; font-size: .9rem; font-weight: 600; color: var(--fg); }
+  .sounds.final > :first-child { grid-column: 1 / -1; }
+  .sounds.seg { grid-template-columns: repeat(3, 1fr); }
+  .sounds.seg.four { grid-template-columns: repeat(4, 1fr); }
+  .sounds.seg .sound { justify-content: center; padding: 10px 4px; }
+  .sounds.seg .sound::before { display: none; }
+
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .toggle span { display: flex; flex-direction: column; font-weight: 500; }
+  .toggle small { font-size: .8rem; font-weight: 400; color: var(--muted); }
+  .toggle input { width: 46px; height: 26px; accent-color: var(--accent); flex: none; }
+
+  /* Dim screen: deliberately black in both themes, with a faint clock. */
+  .dim {
+    position: fixed; inset: 0; z-index: 50; background: #000; color: #4b525c;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px));
+    cursor: pointer; user-select: none;
+  }
+  .dim-time { font-family: var(--font-display); font-size: 3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dim-label { font-size: .9rem; }
+  .dim-hint { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); font-size: .8rem; color: #2c3138; }
+  .dim-hint.warn { color: #8a5a1c; }
+  body.dimmed { overflow: hidden; }
+
   @media (prefers-reduced-motion: reduce) { .dial .prog { transition: none; } }
 </style>
 </head>
@@ -197,10 +222,33 @@
       <h2>เสียงเตือน</h2>
       <span class="total">แตะเพื่อฟังตัวอย่าง</span>
     </div>
-    <div class="sounds" id="sounds" role="radiogroup" aria-label="เลือกเสียงเตือน"></div>
+    <h3 class="sub" id="soundsLabel">จบแต่ละรอบ</h3>
+    <div class="sounds" id="sounds" role="radiogroup" aria-labelledby="soundsLabel"></div>
+    <h3 class="sub" id="finalLabel">จบรอบสุดท้าย</h3>
+    <div class="sounds final" id="finalSounds" role="radiogroup" aria-labelledby="finalLabel"></div>
+    <h3 class="sub" id="lengthLabel">ความยาวเสียงเตือน</h3>
+    <div class="sounds seg" id="lengths" role="radiogroup" aria-labelledby="lengthLabel"></div>
   </section>
 
-  <p class="note">ครบแต่ละรอบจะมีเสียงเตือน 1 ครั้ง แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง<br>ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้</p>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>ระหว่างนั่ง</h2>
+    </div>
+    <h3 class="sub" id="prepLabel">นับถอยหลังก่อนเริ่มรอบแรก</h3>
+    <div class="sounds seg four" id="preps" role="radiogroup" aria-labelledby="prepLabel"></div>
+    <label class="toggle" for="dimToggle">
+      <span>จอมืดระหว่างจับเวลา<small>เหลือแค่เวลาตัวจาง แตะจอเพื่อแสดงปุ่ม</small></span>
+      <input type="checkbox" id="dimToggle" role="switch">
+    </label>
+  </section>
+
+  <p class="note">ครบแต่ละรอบจะมีเสียงเตือน แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง<br>ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้</p>
+</div>
+
+<div class="dim" id="dim" hidden>
+  <div class="dim-label" id="dimLabel"></div>
+  <div class="dim-time" id="dimTime"></div>
+  <div class="dim-hint" id="dimHint">แตะจอเพื่อแสดงปุ่ม</div>
 </div>
 
 <script>
@@ -212,6 +260,8 @@
     startBtn: $("startBtn"), resetBtn: $("resetBtn"), rounds: $("rounds"), total: $("total"),
     chips: $("chips"), addForm: $("addForm"), addInput: $("addInput"), addError: $("addError"),
     clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"), wake: $("wake"),
+    finalSounds: $("finalSounds"), lengths: $("lengths"), preps: $("preps"), dimToggle: $("dimToggle"),
+    dim: $("dim"), dimTime: $("dimTime"), dimLabel: $("dimLabel"), dimHint: $("dimHint"),
   };
   const CIRC = 2 * Math.PI * 52;
   els.prog.style.strokeDasharray = CIRC;
@@ -224,12 +274,13 @@
   } catch (_) {}
   const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(rounds)); } catch (_) {} };
 
-  // state: idle | running | paused | finished
+  // state: idle | prep (settling-in countdown) | running | paused | finished
   let state = "idle";
   let idx = 0;          // current round index
-  let endAt = 0;        // ms timestamp when current round ends (running)
+  let endAt = 0;        // ms timestamp when the countdown (prep) or current round (running) ends
   let remainingMs = 0;  // remaining when paused
   let timerId = null;
+  const active = () => state === "running" || state === "prep";
 
   // ---------- sound ----------
   let ctx = null;
@@ -241,13 +292,30 @@
     if (ctx && ctx.state === "suspended") ctx.resume();
     return ctx;
   }
-  // Each sound is one short alert.
+  // An alert lasts settings.length seconds: a soft sound rings out for that long,
+  // a short sound repeats until the time is used up.
   const SOUNDS = {
-    chime:  { label: "กริ๊ง 2 โน้ต", notes: [[880, 0], [1318.5, 0.28]] },
-    beep:   { label: "บี๊บดิจิทัล", beeps: [0, 0.18, 0.36] },
+    bowl:  { label: "ขันทิเบต (นุ่ม)" },
+    wood:  { label: "ไม้เคาะ (นุ่ม)" },
+    chime: { label: "กริ๊ง 2 โน้ต" },
+    beep:  { label: "บี๊บดิจิทัล" },
   };
+  const LENGTHS = [2, 4, 6, 10, 15, 20];
+  const PREPS = [0, 10, 20, 30];
   let soundKey = "chime";
   try { const k = localStorage.getItem(STORE_KEY + ":sound"); if (k && SOUNDS[k]) soundKey = k; } catch (_) {}
+
+  const SETTINGS_KEY = STORE_KEY + ":settings";
+  const settings = { finalSound: "bowl", length: 4, prep: 10, dim: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    if (saved.finalSound === "same" || SOUNDS[saved.finalSound]) settings.finalSound = saved.finalSound;
+    if (LENGTHS.includes(saved.length)) settings.length = saved.length;
+    if (PREPS.includes(saved.prep)) settings.prep = saved.prep;
+    if (typeof saved.dim === "boolean") settings.dim = saved.dim;
+  } catch (_) {}
+  const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {} };
+  const finalKey = () => (settings.finalSound === "same" ? soundKey : settings.finalSound);
 
   function tone(ac, out, freq, start, peak, decay, attack, type = "sine") {
     const osc = ac.createOscillator();
@@ -262,17 +330,49 @@
     osc.stop(start + decay + 0.05);
   }
 
-  function chime(key = soundKey) {
+  // Repeat a pattern that sounds for [patternLength] seconds about every [every]
+  // seconds, spaced so the last one dies away right at [length] seconds.
+  function repeat(t0, length, patternLength, every, play) {
+    const n = Math.max(1, Math.round((length - patternLength) / every) + 1);
+    const gap = n > 1 ? (length - patternLength) / (n - 1) : 0;
+    for (let i = 0; i < n; i++) play(t0 + i * gap);
+  }
+
+  let currentOut = null;
+  function chime(key = soundKey, length = settings.length) {
     const ac = audio();
-    const snd = SOUNDS[key] || SOUNDS.chime;
     if (ac) {
       const t0 = ac.currentTime + 0.05;
+      if (currentOut) currentOut.gain.setTargetAtTime(0, ac.currentTime, 0.05); // cut off a previous alert
       const out = ac.createGain();
       out.connect(ac.destination);
-      if (snd.notes) {
-        snd.notes.forEach(([f, off]) => tone(ac, out, f, t0 + off, 0.9, 1.2, 0.02));
+      currentOut = out;
+      if (key === "bowl") {
+        // Singing bowl: soft attack, inharmonic partials, a slow beat from a detuned twin.
+        const partials = [[1, 1], [2.71, 0.45], [5.12, 0.2], [8.3, 0.08]];
+        out.gain.value = 0.36;
+        const decay = Math.max(1.6, length * 2.15);
+        partials.forEach(([ratio, amp]) => {
+          tone(ac, out, 262 * ratio, t0, amp, decay / ratio ** 0.3, 0.06);
+          tone(ac, out, 262 * ratio + 1.3, t0, amp * 0.6, decay / ratio ** 0.3, 0.06);
+        });
+      } else if (key === "wood") {
+        // Wooden block: two soft knocks, repeated.
+        repeat(t0, length, 0.45, 1.5, (at) => {
+          [0, 0.25].forEach((off) => {
+            tone(ac, out, 740, at + off, 0.7, 0.2, 0.003);
+            tone(ac, out, 1480, at + off, 0.15, 0.08, 0.003);
+          });
+        });
+      } else if (key === "beep") {
+        repeat(t0, length, 0.5, 1, (at) => {
+          [0, 0.18, 0.36].forEach((off) => tone(ac, out, 1760, at + off, 0.35, 0.12, 0.005, "square"));
+        });
       } else {
-        snd.beeps.forEach((off) => tone(ac, out, 1760, t0 + off, 0.35, 0.12, 0.005, "square"));
+        repeat(t0, length, 0.9, 1.8, (at) => {
+          tone(ac, out, 880, at, 0.9, 1.2, 0.02);
+          tone(ac, out, 1318.5, at + 0.28, 0.9, 1.2, 0.02);
+        });
       }
     }
     try { navigator.vibrate && navigator.vibrate([400, 150, 400]); } catch (_) {}
@@ -287,15 +387,15 @@
     if (wakeLock) return;
     try {
       const lock = await navigator.wakeLock.request("screen");
-      if (state !== "running") { lock.release(); return; }
+      if (!active()) { lock.release(); return; }
       wakeLock = lock;
       wakeState = "on";
       lock.addEventListener("release", () => {
         if (wakeLock !== lock) return; // released on purpose
         wakeLock = null;
         // The phone dropped the lock (e.g. battery saver); ask again while the page is in front.
-        if (state === "running" && document.visibilityState === "visible") lockScreen();
-        else { wakeState = state === "running" ? "denied" : "off"; renderWake(); }
+        if (active() && document.visibilityState === "visible") lockScreen();
+        else { wakeState = active() ? "denied" : "off"; renderWake(); }
       });
     } catch (_) {
       wakeLock = null;
@@ -312,17 +412,21 @@
   }
   function renderWake() {
     const el = els.wake;
-    el.hidden = state !== "running" || wakeState === "off";
+    el.hidden = !active() || wakeState === "off";
     el.dataset.state = wakeState;
     el.textContent = wakeState === "on"
       ? "🔆 กันจอดับอยู่ วางมือถือไว้ได้เลย"
       : wakeState === "unsupported"
         ? "⚠️ เบราว์เซอร์นี้กันจอดับไม่ได้ ตั้งเวลาปิดหน้าจอของมือถือให้นานกว่ารอบ"
         : "⚠️ มือถือไม่อนุญาตให้กันจอดับ แตะเพื่อลองอีกครั้ง";
+    // The dim screen hides the pill, so it repeats a warning in its hint line.
+    els.dimHint.textContent = wakeState === "denied" || wakeState === "unsupported"
+      ? "⚠️ จออาจดับเอง แตะเพื่อดูรายละเอียด" : "แตะจอเพื่อแสดงปุ่ม";
+    els.dimHint.classList.toggle("warn", wakeState === "denied" || wakeState === "unsupported");
   }
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      if (state === "running") { lockScreen(); tick(); }
+      if (active()) { lockScreen(); tick(); }
     }
   });
 
@@ -397,7 +501,7 @@
   }
 
   function currentRemainingMs() {
-    if (state === "running") return Math.max(0, endAt - Date.now());
+    if (active()) return Math.max(0, endAt - Date.now());
     if (state === "paused") return remainingMs;
     if (state === "finished") return 0;
     return (rounds[0] || 0) * 1000;
@@ -405,14 +509,17 @@
 
   function renderDial() {
     const rem = currentRemainingMs();
-    const len = state === "idle" ? (rounds[0] || 0) : (rounds[idx] || 0);
+    const len = state === "prep" ? settings.prep : state === "idle" ? (rounds[0] || 0) : (rounds[idx] || 0);
     els.time.textContent = fmt(rem / 1000);
     const frac = len ? 1 - rem / (len * 1000) : 0;
     els.prog.style.strokeDashoffset = state === "finished" ? 0 : CIRC * (1 - frac);
     els.dial.classList.toggle("finished", state === "finished");
+    els.dimTime.textContent = els.time.textContent;
+    els.dimLabel.textContent = state === "prep" ? "เตรียมตัว" : `รอบ ${idx + 1} จาก ${rounds.length}`;
 
     if (state === "idle") els.roundLabel.textContent = rounds.length ? `พร้อมเริ่ม • ${rounds.length} รอบ` : "ยังไม่ได้ตั้งรอบ";
     else if (state === "finished") els.roundLabel.textContent = "ครบทุกรอบแล้ว";
+    else if (state === "prep") els.roundLabel.textContent = "เตรียมตัว จัดท่านั่ง";
     else els.roundLabel.textContent = `รอบ ${idx + 1} จาก ${rounds.length}${state === "paused" ? " • หยุดชั่วคราว" : ""}`;
 
     if (state === "running") {
@@ -421,6 +528,8 @@
       els.endAt.textContent = idx < rounds.length - 1
         ? `รอบนี้ครบ ${clock(endAt)} • ทั้งหมด ${clock(allEnd)}`
         : `ครบเวลา ${clock(endAt)}`;
+    } else if (state === "prep") {
+      els.endAt.textContent = `เริ่มรอบ 1 เมื่อนับถึง 0`;
     } else if (state === "finished") {
       els.endAt.textContent = "หยุดเองแล้ว ไม่ต้องกดอะไร";
     } else {
@@ -429,17 +538,41 @@
   }
 
   function renderButtons() {
-    document.body.classList.toggle("running", state === "running" || state === "paused");
+    document.body.classList.toggle("running", active() || state === "paused");
     els.startBtn.disabled = !rounds.length;
     els.startBtn.dataset.action = state === "running" ? "pause" : state === "paused" ? "resume" : "start";
-    els.startBtn.textContent = state === "running" ? "หยุดชั่วคราว" : state === "paused" ? "ทำต่อ" : state === "finished" ? "เริ่มใหม่" : "เริ่ม";
+    els.startBtn.textContent = state === "running" ? "หยุดชั่วคราว" : state === "paused" ? "ทำต่อ"
+      : state === "prep" ? "ข้าม เริ่มรอบแรกเลย" : state === "finished" ? "เริ่มใหม่" : "เริ่ม";
     els.resetBtn.disabled = state === "idle";
   }
 
-  function renderAll() { renderList(); renderDial(); renderButtons(); renderWake(); }
+  function renderAll() { renderList(); renderDial(); renderButtons(); renderWake(); renderDim(); }
+
+  // ---------- dim screen ----------
+  // While timing, a black screen shows only a faint clock. A tap brings the
+  // controls back for a short while, then it dims again.
+  const REVEAL_MS = 15000;
+  let revealedUntil = 0;
+  let dimTimer = null;
+  function renderDim() {
+    const show = settings.dim && active() && Date.now() >= revealedUntil;
+    els.dim.hidden = !show;
+    document.body.classList.toggle("dimmed", show);
+  }
+  function reveal() {
+    revealedUntil = Date.now() + REVEAL_MS;
+    clearTimeout(dimTimer);
+    dimTimer = setTimeout(renderDim, REVEAL_MS + 50);
+    renderDim();
+  }
 
   // ---------- engine ----------
   function tick() {
+    if (state === "prep") {
+      if (Date.now() >= endAt) beginRounds(endAt);
+      else renderDial();
+      return;
+    }
     if (state !== "running") return;
     if (Date.now() >= endAt) {
       // Round finished: ring once, then move on (catch up if the page was asleep).
@@ -449,11 +582,12 @@
         nextEnd += rounds[next] * 1000;
         next++;
       }
-      chime();
       if (next >= rounds.length) {
+        chime(finalKey());
         finish();
         return;
       }
+      chime();
       idx = next;
       endAt = nextEnd + rounds[idx] * 1000;
       renderList();
@@ -466,12 +600,26 @@
 
   function start() {
     audio(); // unlock audio inside the tap
-    if (state === "idle" || state === "finished") {
-      idx = 0;
-      endAt = Date.now() + rounds[0] * 1000;
-    } else if (state === "paused") {
+    revealedUntil = 0;
+    if (state === "paused") {
       endAt = Date.now() + remainingMs;
+      state = "running";
+    } else if (settings.prep > 0) {
+      idx = 0;
+      endAt = Date.now() + settings.prep * 1000;
+      state = "prep";
+    } else {
+      beginRounds(Date.now());
+      return;
     }
+    lockScreen();
+    startLoop();
+    renderAll();
+  }
+  // Round 1 starts at [at]: the end of the countdown, or now.
+  function beginRounds(at) {
+    idx = 0;
+    endAt = at + rounds[0] * 1000;
     state = "running";
     lockScreen();
     startLoop();
@@ -486,38 +634,65 @@
   }
   function finish() {
     state = "finished";
+    revealedUntil = 0;
     stopLoop();
     unlockScreen();
     renderAll();
   }
   function reset() {
-    state = "idle"; idx = 0; stopLoop(); unlockScreen(); renderAll();
+    state = "idle"; idx = 0; revealedUntil = 0; stopLoop(); unlockScreen(); renderAll();
   }
 
   // ---------- events ----------
-  els.startBtn.onclick = () => (state === "running" ? pause() : start());
+  els.startBtn.onclick = () => {
+    if (state === "running") pause();
+    else if (state === "prep") beginRounds(Date.now());
+    else start();
+  };
+  els.dim.onclick = reveal;
+  // Any tap while the controls are showing keeps them up a little longer.
+  document.addEventListener("pointerdown", (e) => {
+    if (active() && !els.dim.contains(e.target) && Date.now() < revealedUntil) reveal();
+  });
   els.resetBtn.onclick = reset;
   els.wake.onclick = () => { if (wakeState === "denied") lockScreen(); };
   els.testSound.onclick = () => chime();
 
-  function renderSounds() {
-    els.sounds.innerHTML = "";
-    Object.entries(SOUNDS).forEach(([key, snd]) => {
+  // A row of one-choice buttons (radio group) that re-renders itself on pick.
+  function choices(container, options, current, onPick, idPrefix) {
+    container.innerHTML = "";
+    options.forEach(([value, label]) => {
       const b = document.createElement("button");
-      b.type = "button"; b.className = "sound"; b.id = "sound-" + key;
+      b.type = "button"; b.className = "sound"; b.id = `${idPrefix}-${value}`;
       b.setAttribute("role", "radio");
-      b.setAttribute("aria-checked", String(key === soundKey));
-      b.textContent = snd.label;
-      b.onclick = () => {
-        soundKey = key;
-        try { localStorage.setItem(STORE_KEY + ":sound", key); } catch (_) {}
-        renderSounds();
-        chime(key);
-      };
-      els.sounds.appendChild(b);
+      b.setAttribute("aria-checked", String(value === current()));
+      b.textContent = label;
+      b.onclick = () => { onPick(value); choices(container, options, current, onPick, idPrefix); };
+      container.appendChild(b);
     });
   }
-  renderSounds();
+  const soundOptions = Object.entries(SOUNDS).map(([k, v]) => [k, v.label]);
+  choices(els.sounds, soundOptions, () => soundKey, (key) => {
+    soundKey = key;
+    try { localStorage.setItem(STORE_KEY + ":sound", key); } catch (_) {}
+    chime(key);
+  }, "sound");
+  choices(els.finalSounds, [["same", "เหมือนรอบอื่น"], ...soundOptions], () => settings.finalSound, (key) => {
+    settings.finalSound = key;
+    saveSettings();
+    chime(finalKey());
+  }, "final");
+  choices(els.lengths, LENGTHS.map((n) => [n, `${n} วิ`]), () => settings.length, (n) => {
+    settings.length = n;
+    saveSettings();
+    chime();
+  }, "length");
+  choices(els.preps, PREPS.map((n) => [n, n ? `${n} วิ` : "ไม่มี"]), () => settings.prep, (n) => {
+    settings.prep = n;
+    saveSettings();
+  }, "prep");
+  els.dimToggle.checked = settings.dim;
+  els.dimToggle.onchange = () => { settings.dim = els.dimToggle.checked; saveSettings(); renderDim(); };
   els.clearBtn.onclick = () => editRounds(() => { rounds = []; });
 
   [15, 20, 30, 40, 45, 60].forEach((m) => {
