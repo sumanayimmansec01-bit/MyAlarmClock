@@ -145,8 +145,7 @@
 
   .sub { margin: 4px 0 -4px; font-size: .9rem; font-weight: 600; color: var(--fg); }
   .sounds.final > :first-child { grid-column: 1 / -1; }
-  .sounds.seg { grid-template-columns: repeat(3, 1fr); }
-  .sounds.seg.four { grid-template-columns: repeat(4, 1fr); }
+  .sounds.seg { grid-template-columns: repeat(4, 1fr); }
   .sounds.seg .sound { justify-content: center; padding: 10px 4px; }
   .sounds.seg .sound::before { display: none; }
 
@@ -226,8 +225,6 @@
     <div class="sounds" id="sounds" role="radiogroup" aria-labelledby="soundsLabel"></div>
     <h3 class="sub" id="finalLabel">จบรอบสุดท้าย</h3>
     <div class="sounds final" id="finalSounds" role="radiogroup" aria-labelledby="finalLabel"></div>
-    <h3 class="sub" id="lengthLabel">ความยาวเสียงเตือน</h3>
-    <div class="sounds seg" id="lengths" role="radiogroup" aria-labelledby="lengthLabel"></div>
   </section>
 
   <section class="panel">
@@ -235,7 +232,7 @@
       <h2>ระหว่างนั่ง</h2>
     </div>
     <h3 class="sub" id="prepLabel">นับถอยหลังก่อนเริ่มรอบแรก</h3>
-    <div class="sounds seg four" id="preps" role="radiogroup" aria-labelledby="prepLabel"></div>
+    <div class="sounds seg" id="preps" role="radiogroup" aria-labelledby="prepLabel"></div>
     <label class="toggle" for="dimToggle">
       <span>จอมืดระหว่างจับเวลา<small>เหลือแค่เวลาตัวจาง แตะจอเพื่อแสดงปุ่ม</small></span>
       <input type="checkbox" id="dimToggle" role="switch">
@@ -260,7 +257,7 @@
     startBtn: $("startBtn"), resetBtn: $("resetBtn"), rounds: $("rounds"), total: $("total"),
     chips: $("chips"), addForm: $("addForm"), addInput: $("addInput"), addError: $("addError"),
     clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"), wake: $("wake"),
-    finalSounds: $("finalSounds"), lengths: $("lengths"), preps: $("preps"), dimToggle: $("dimToggle"),
+    finalSounds: $("finalSounds"), preps: $("preps"), dimToggle: $("dimToggle"),
     dim: $("dim"), dimTime: $("dimTime"), dimLabel: $("dimLabel"), dimHint: $("dimHint"),
   };
   const CIRC = 2 * Math.PI * 52;
@@ -292,25 +289,22 @@
     if (ctx && ctx.state === "suspended") ctx.resume();
     return ctx;
   }
-  // An alert lasts settings.length seconds: a soft sound rings out for that long,
-  // a short sound repeats until the time is used up.
+  // Each alert is a single strike of the chosen sound.
   const SOUNDS = {
     bowl:  { label: "ขันทิเบต (นุ่ม)" },
     wood:  { label: "ไม้เคาะ (นุ่ม)" },
     chime: { label: "กริ๊ง 2 โน้ต" },
     beep:  { label: "บี๊บดิจิทัล" },
   };
-  const LENGTHS = [2, 4, 6, 10, 15, 20];
   const PREPS = [0, 10, 20, 30];
   let soundKey = "chime";
   try { const k = localStorage.getItem(STORE_KEY + ":sound"); if (k && SOUNDS[k]) soundKey = k; } catch (_) {}
 
   const SETTINGS_KEY = STORE_KEY + ":settings";
-  const settings = { finalSound: "bowl", length: 4, prep: 10, dim: true };
+  const settings = { finalSound: "bowl", prep: 10, dim: true };
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
     if (saved.finalSound === "same" || SOUNDS[saved.finalSound]) settings.finalSound = saved.finalSound;
-    if (LENGTHS.includes(saved.length)) settings.length = saved.length;
     if (PREPS.includes(saved.prep)) settings.prep = saved.prep;
     if (typeof saved.dim === "boolean") settings.dim = saved.dim;
   } catch (_) {}
@@ -330,16 +324,8 @@
     osc.stop(start + decay + 0.05);
   }
 
-  // Repeat a pattern that sounds for [patternLength] seconds about every [every]
-  // seconds, spaced so the last one dies away right at [length] seconds.
-  function repeat(t0, length, patternLength, every, play) {
-    const n = Math.max(1, Math.round((length - patternLength) / every) + 1);
-    const gap = n > 1 ? (length - patternLength) / (n - 1) : 0;
-    for (let i = 0; i < n; i++) play(t0 + i * gap);
-  }
-
   let currentOut = null;
-  function chime(key = soundKey, length = settings.length) {
+  function chime(key = soundKey) {
     const ac = audio();
     if (ac) {
       const t0 = ac.currentTime + 0.05;
@@ -349,30 +335,25 @@
       currentOut = out;
       if (key === "bowl") {
         // Singing bowl: soft attack, inharmonic partials, a slow beat from a detuned twin.
+        // It rings out for about 4 seconds.
         const partials = [[1, 1], [2.71, 0.45], [5.12, 0.2], [8.3, 0.08]];
         out.gain.value = 0.36;
-        const decay = Math.max(1.6, length * 2.15);
+        const decay = 8.6;
         partials.forEach(([ratio, amp]) => {
           tone(ac, out, 262 * ratio, t0, amp, decay / ratio ** 0.3, 0.06);
           tone(ac, out, 262 * ratio + 1.3, t0, amp * 0.6, decay / ratio ** 0.3, 0.06);
         });
       } else if (key === "wood") {
-        // Wooden block: two soft knocks, repeated.
-        repeat(t0, length, 0.45, 1.5, (at) => {
-          [0, 0.25].forEach((off) => {
-            tone(ac, out, 740, at + off, 0.7, 0.2, 0.003);
-            tone(ac, out, 1480, at + off, 0.15, 0.08, 0.003);
-          });
+        // Wooden block: two soft knocks.
+        [0, 0.25].forEach((off) => {
+          tone(ac, out, 740, t0 + off, 0.7, 0.2, 0.003);
+          tone(ac, out, 1480, t0 + off, 0.15, 0.08, 0.003);
         });
       } else if (key === "beep") {
-        repeat(t0, length, 0.5, 1, (at) => {
-          [0, 0.18, 0.36].forEach((off) => tone(ac, out, 1760, at + off, 0.35, 0.12, 0.005, "square"));
-        });
+        [0, 0.18, 0.36].forEach((off) => tone(ac, out, 1760, t0 + off, 0.35, 0.12, 0.005, "square"));
       } else {
-        repeat(t0, length, 0.9, 1.8, (at) => {
-          tone(ac, out, 880, at, 0.9, 1.2, 0.02);
-          tone(ac, out, 1318.5, at + 0.28, 0.9, 1.2, 0.02);
-        });
+        tone(ac, out, 880, t0, 0.9, 1.2, 0.02);
+        tone(ac, out, 1318.5, t0 + 0.28, 0.9, 1.2, 0.02);
       }
     }
     try { navigator.vibrate && navigator.vibrate([400, 150, 400]); } catch (_) {}
@@ -682,11 +663,6 @@
     saveSettings();
     chime(finalKey());
   }, "final");
-  choices(els.lengths, LENGTHS.map((n) => [n, `${n} วิ`]), () => settings.length, (n) => {
-    settings.length = n;
-    saveSettings();
-    chime();
-  }, "length");
   choices(els.preps, PREPS.map((n) => [n, n ? `${n} วิ` : "ไม่มี"]), () => settings.prep, (n) => {
     settings.prep = n;
     saveSettings();

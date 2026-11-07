@@ -545,42 +545,36 @@ test.describe("alert sounds", () => {
     await expect(final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)" })).toHaveAttribute("aria-checked", "true");
   });
 
-  for (const key of ["bowl", "wood", "chime", "beep"]) {
-    for (const length of [2, 10]) {
-      test(`${key} rings for about ${length} s when set to ${length} s`, async ({ page }) => {
-        // Route the app's audio into an offline context so the alert can be measured.
-        await page.addInitScript((len) => {
-          window.__off = new OfflineAudioContext(1, 44100 * (len + 6), 44100);
-          window.__off.resume = () => Promise.resolve();
-          window.AudioContext = function () { return window.__off; };
-        }, length);
-        await open(page, { sound: key, settings: { prep: 0, dim: false, length } });
-        const { peak, seconds } = await page.evaluate(async () => {
-          document.getElementById("testSound").click();
-          const d = (await window.__off.startRendering()).getChannelData(0);
-          let peak = 0, last = 0;
-          for (let i = 0; i < d.length; i++) {
-            const a = Math.abs(d[i]);
-            if (a > peak) peak = a;
-            if (a > 0.01) last = i; // still clearly audible (louder than -40 dB)
-          }
-          return { peak, seconds: last / 44100 };
-        });
-        expect(peak).toBeLessThanOrEqual(1);
-        expect(seconds).toBeGreaterThanOrEqual(length * 0.85);
-        expect(seconds).toBeLessThanOrEqual(length * 1.1);
+  // How many notes one strike of each sound is made of.
+  const NOTES = { bowl: 8, wood: 4, chime: 2, beep: 3 };
+  for (const [key, notes] of Object.entries(NOTES)) {
+    test(`${key} plays once and stops`, async ({ page }) => {
+      await page.addInitScript(() => {
+        window.__off = new OfflineAudioContext(1, 44100 * 12, 44100);
+        window.__off.resume = () => Promise.resolve();
+        window.AudioContext = function () { return window.__off; };
       });
-    }
+      await open(page, { sound: key });
+      await page.locator("#testSound").click();
+      expect((await tones(page)).length).toBe(notes);
+      const { peak, seconds } = await page.evaluate(async () => {
+        const d = (await window.__off.startRendering()).getChannelData(0);
+        let peak = 0, last = 0;
+        for (let i = 0; i < d.length; i++) {
+          const a = Math.abs(d[i]);
+          if (a > peak) peak = a;
+          if (a > 0.01) last = i;
+        }
+        return { peak, seconds: last / 44100 };
+      });
+      expect(peak).toBeLessThanOrEqual(1);
+      expect(seconds).toBeLessThanOrEqual(key === "bowl" ? 4.5 : 1.5);
+    });
   }
 
-  test("length choice is remembered", async ({ page }) => {
-    await open(page, { settings: null });
-    const lengths = page.locator("#lengths");
-    await expect(lengths.getByRole("radio")).toHaveText(["2 วิ", "4 วิ", "6 วิ", "10 วิ", "15 วิ", "20 วิ"]);
-    await expect(lengths.getByRole("radio", { name: "4 วิ" })).toHaveAttribute("aria-checked", "true");
-    await lengths.getByRole("radio", { name: "15 วิ" }).click();
-    await page.reload();
-    await expect(lengths.getByRole("radio", { name: "15 วิ" })).toHaveAttribute("aria-checked", "true");
+  test("there is no alert-length setting", async ({ page }) => {
+    await open(page);
+    await expect(page.getByText("ความยาวเสียงเตือน")).toHaveCount(0);
   });
 });
 
