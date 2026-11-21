@@ -9,6 +9,8 @@ module.exports = defineConfig({
     baseURL: "http://127.0.0.1:4173",
     serviceWorkers: "block",
     timezoneId: "Asia/Bangkok",
+    // Use an already-installed Chromium when its path is given (e.g. CHROMIUM_PATH=/path/to/chrome).
+    launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
     locale: "th-TH",
   },
   webServer: {

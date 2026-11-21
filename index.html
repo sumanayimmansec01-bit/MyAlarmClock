@@ -12,13 +12,13 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} body{margin:0} [hidden]{display:none!important}</style>
 <title>นาฬิกาจับเวลาหลายรอบ</title>
-<title>นาฬิกาจับเวลาหลายรอบ</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
 <style>
-  /* Layout: one centered phone-width column — dial on top, controls, then the round list. */
+  /* Layout: one phone screen, no scrolling — dial, round strip, start button.
+     Rounds and settings open as sheets from the bottom. */
   :root {
     --bg: #eef1f5;
     --surface: #ffffff;
@@ -52,18 +52,22 @@
     color-scheme: dark;
   }
 
-  html, body { min-height: 100%; }
+  html { height: 100%; box-sizing: border-box; }
   body {
+    box-sizing: border-box; height: 100%; overflow: hidden;
     background: var(--bg); color: var(--fg);
     font-family: var(--font-body); font-size: 16px; line-height: 1.5;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 16px 32px;
+    padding-block: 12px 16px;
     -webkit-tap-highlight-color: transparent;
   }
-  .app { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  .app {
+    max-width: 440px; height: 100%; margin: 0 auto;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
+  }
 
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   h1 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; margin: 0; letter-spacing: .01em; }
   .ghost-btn {
     background: none; border: 1px solid var(--line); color: var(--muted);
@@ -71,7 +75,7 @@
   }
 
   /* Dial */
-  .dial { position: relative; width: min(78vw, 300px); aspect-ratio: 1; max-width: 100%; margin: 0 auto; }
+  .dial { position: relative; width: min(78vw, 300px, 40dvh); aspect-ratio: 1; max-width: 100%; margin: 0 auto; flex: none; }
   .dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
   .dial .track { fill: none; stroke: var(--track); stroke-width: 10; }
   .dial .prog { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
@@ -83,7 +87,7 @@
   .dial.finished .round-label { color: var(--done); font-weight: 600; }
 
   /* Controls */
-  .controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .controls { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .controls .btn.primary { width: 100%; font-size: 1.15rem; padding: 18px; }
   /* running shows an amber Pause, paused shows a green Resume */
   #startBtn[data-action="pause"] { background: var(--pause); border-color: var(--pause); color: var(--pause-fg); }
@@ -143,9 +147,46 @@
 
   body.running .setup-only { opacity: .5; pointer-events: none; }
 
+  /* Round strip on the main screen */
+  .strip-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .strip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .strip { position: relative; list-style: none; margin: 0; padding: 0 0 2px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .strip li {
+    flex: none; min-width: 44px; padding: 4px 10px; border-radius: 999px; text-align: center;
+    border: 1px solid var(--line); background: var(--surface);
+    font-family: var(--font-display); font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .strip li.current { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .strip li.done { color: var(--muted); text-decoration: line-through; }
+  .strip .empty-strip { border-style: dashed; color: var(--muted); font-family: var(--font-body); font-weight: 400; }
+  .ghost-btn:disabled { opacity: .4; cursor: default; }
+
+  /* Bottom sheets */
+  dialog.sheet {
+    width: 100%; max-width: 480px; max-height: 88dvh; margin: auto auto 0; padding: 0;
+    border: 0; border-radius: 22px 22px 0 0; background: var(--surface); color: var(--fg);
+    display: flex; flex-direction: column;
+  }
+  dialog.sheet:not([open]) { display: none; }
+  dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
+  .sheet-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-head h2 { margin: 0; font-size: 1.05rem; }
+  .sheet-head .done-btn { font: inherit; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 6px 4px; cursor: pointer; }
+  .sheet-body {
+    overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+    padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .sheet-body h3.group { margin: 6px 0 0; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
   .sub { margin: 4px 0 -4px; font-size: .9rem; font-weight: 600; color: var(--fg); }
   .sounds.final > :first-child { grid-column: 1 / -1; }
+  .sounds > .wide { grid-column: 1 / -1; }
   .sounds.seg { grid-template-columns: repeat(4, 1fr); }
+  .sounds.seg.three { grid-template-columns: repeat(3, 1fr); }
   .sounds.seg .sound { justify-content: center; padding: 10px 4px; }
   .sounds.seg .sound::before { display: none; }
 
@@ -175,7 +216,7 @@
 <div class="app">
   <header>
     <h1>จับเวลาหลายรอบ</h1>
-    <button class="ghost-btn" id="testSound" type="button">🔔 ทดสอบเสียง</button>
+    <button class="ghost-btn" id="settingsBtn" type="button">⚙️ ตั้งค่า</button>
   </header>
 
   <div class="dial" id="dial">
@@ -192,18 +233,27 @@
 
   <button class="wake" id="wake" type="button" hidden></button>
 
+  <section class="strip-wrap" aria-label="รอบที่ตั้งไว้">
+    <div class="strip-head">
+      <span class="total" id="total"></span>
+      <button class="ghost-btn" id="editRoundsBtn" type="button">✎ แก้ไขรอบ</button>
+    </div>
+    <ol class="strip" id="strip"></ol>
+  </section>
+
   <div class="controls">
     <button class="btn primary" id="startBtn" type="button">เริ่ม</button>
     <button class="ghost-btn reset-btn" id="resetBtn" type="button">↺ รีเซ็ต</button>
   </div>
+</div>
 
-  <section class="panel">
-    <div class="panel-head">
-      <h2>รอบที่ตั้งไว้</h2>
-      <span class="total" id="total"></span>
-    </div>
+<dialog class="sheet" id="roundsSheet" aria-labelledby="roundsTitle">
+  <div class="sheet-head">
+    <h2 id="roundsTitle">รอบที่ตั้งไว้</h2>
+    <button class="done-btn" type="button" data-close>เสร็จ</button>
+  </div>
+  <div class="sheet-body">
     <ol class="rounds" id="rounds"></ol>
-
     <div class="setup-only" style="display:flex;flex-direction:column;gap:14px">
       <div class="chips" id="chips"></div>
       <form class="add-row" id="addForm" autocomplete="off">
@@ -214,33 +264,35 @@
       <p class="error" id="addError" hidden></p>
       <button class="ghost-btn" id="clearBtn" type="button" style="align-self:flex-start">ลบทุกรอบ</button>
     </div>
-  </section>
+  </div>
+</dialog>
 
-  <section class="panel">
-    <div class="panel-head">
-      <h2>เสียงเตือน</h2>
-      <span class="total">แตะเพื่อฟังตัวอย่าง</span>
-    </div>
+<dialog class="sheet" id="settingsSheet" aria-labelledby="settingsTitle">
+  <div class="sheet-head">
+    <h2 id="settingsTitle">ตั้งค่า</h2>
+    <button class="done-btn" type="button" data-close>เสร็จ</button>
+  </div>
+  <div class="sheet-body">
+    <h3 class="group">เสียงเตือน • แตะเพื่อฟังตัวอย่าง</h3>
     <h3 class="sub" id="soundsLabel">จบแต่ละรอบ</h3>
     <div class="sounds" id="sounds" role="radiogroup" aria-labelledby="soundsLabel"></div>
     <h3 class="sub" id="finalLabel">จบรอบสุดท้าย</h3>
     <div class="sounds final" id="finalSounds" role="radiogroup" aria-labelledby="finalLabel"></div>
-  </section>
+    <h3 class="sub" id="volumeLabel">ความดัง</h3>
+    <div class="sounds seg three" id="volumes" role="radiogroup" aria-labelledby="volumeLabel"></div>
+    <button class="btn" id="testSound" type="button">🔔 ทดสอบเสียง</button>
 
-  <section class="panel">
-    <div class="panel-head">
-      <h2>ระหว่างนั่ง</h2>
-    </div>
+    <h3 class="group">ระหว่างนั่ง</h3>
     <h3 class="sub" id="prepLabel">นับถอยหลังก่อนเริ่มรอบแรก</h3>
     <div class="sounds seg" id="preps" role="radiogroup" aria-labelledby="prepLabel"></div>
     <label class="toggle" for="dimToggle">
       <span>จอมืดระหว่างจับเวลา<small>เหลือแค่เวลาตัวจาง แตะจอเพื่อแสดงปุ่ม</small></span>
       <input type="checkbox" id="dimToggle" role="switch">
     </label>
-  </section>
 
-  <p class="note">ครบแต่ละรอบจะมีเสียงเตือน แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง<br>ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้</p>
-</div>
+    <p class="note">ครบแต่ละรอบจะมีเสียงเตือน แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง • ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้ และเปิดเสียงสื่อของมือถือไว้</p>
+  </div>
+</dialog>
 
 <div class="dim" id="dim" hidden>
   <div class="dim-label" id="dimLabel"></div>
@@ -259,6 +311,8 @@
     clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"), wake: $("wake"),
     finalSounds: $("finalSounds"), preps: $("preps"), dimToggle: $("dimToggle"),
     dim: $("dim"), dimTime: $("dimTime"), dimLabel: $("dimLabel"), dimHint: $("dimHint"),
+    strip: $("strip"), editRoundsBtn: $("editRoundsBtn"), settingsBtn: $("settingsBtn"),
+    roundsSheet: $("roundsSheet"), settingsSheet: $("settingsSheet"), volumes: $("volumes"),
   };
   const CIRC = 2 * Math.PI * 52;
   els.prog.style.strokeDasharray = CIRC;
@@ -291,21 +345,24 @@
   }
   // Each alert is a single strike of the chosen sound.
   const SOUNDS = {
+    rise:  { label: "ขันค่อยๆ ดัง (นุ่มที่สุด)", wide: true },
     bowl:  { label: "ขันทิเบต (นุ่ม)" },
     wood:  { label: "ไม้เคาะ (นุ่ม)" },
     chime: { label: "กริ๊ง 2 โน้ต" },
     beep:  { label: "บี๊บดิจิทัล" },
   };
   const PREPS = [0, 10, 20, 30];
-  let soundKey = "chime";
+  const VOLUMES = { soft: ["เบา", 0.35], medium: ["กลาง", 0.65], loud: ["ดัง", 1] };
+  let soundKey = "rise";
   try { const k = localStorage.getItem(STORE_KEY + ":sound"); if (k && SOUNDS[k]) soundKey = k; } catch (_) {}
 
   const SETTINGS_KEY = STORE_KEY + ":settings";
-  const settings = { finalSound: "bowl", prep: 10, dim: true };
+  const settings = { finalSound: "same", volume: "medium", prep: 10, dim: true };
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
     if (saved.finalSound === "same" || SOUNDS[saved.finalSound]) settings.finalSound = saved.finalSound;
     if (PREPS.includes(saved.prep)) settings.prep = saved.prep;
+    if (VOLUMES[saved.volume]) settings.volume = saved.volume;
     if (typeof saved.dim === "boolean") settings.dim = saved.dim;
   } catch (_) {}
   const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {} };
@@ -324,6 +381,20 @@
     osc.stop(start + decay + 0.05);
   }
 
+  // Fades in from silence over [rise] s, holds, then fades out over [fade] s.
+  function swell(ac, out, freq, start, peak, rise, hold, fade) {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(peak, start + rise);
+    g.gain.setValueAtTime(peak, start + rise + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + rise + hold + fade);
+    osc.connect(g).connect(out);
+    osc.start(start);
+    osc.stop(start + rise + hold + fade + 0.05);
+  }
+
   let currentOut = null;
   function chime(key = soundKey) {
     const ac = audio();
@@ -331,9 +402,19 @@
       const t0 = ac.currentTime + 0.05;
       if (currentOut) currentOut.gain.setTargetAtTime(0, ac.currentTime, 0.05); // cut off a previous alert
       const out = ac.createGain();
-      out.connect(ac.destination);
+      const master = ac.createGain();
+      master.gain.value = VOLUMES[settings.volume][1];
+      out.connect(master).connect(ac.destination);
       currentOut = out;
-      if (key === "bowl") {
+      if (key === "rise") {
+        // A rubbed singing bowl: no strike at all. It grows out of silence over
+        // 3 s so it never startles, rests, then fades away over about 5 s.
+        out.gain.value = 0.5;
+        [[1, 1], [2.71, 0.3], [5.12, 0.08]].forEach(([ratio, amp]) => {
+          swell(ac, out, 220 * ratio, t0, amp, 3, 1.5, 5);
+          swell(ac, out, 220 * ratio + 0.8, t0, amp * 0.6, 3, 1.5, 5); // slow shimmer
+        });
+      } else if (key === "bowl") {
         // Singing bowl: soft attack, inharmonic partials, a slow beat from a detuned twin.
         // It rings out for about 4 seconds.
         const partials = [[1, 1], [2.71, 0.45], [5.12, 0.2], [8.3, 0.08]];
@@ -478,7 +559,33 @@
       els.rounds.appendChild(li);
     });
     const sum = rounds.reduce((a, b) => a + b, 0);
-    els.total.textContent = rounds.length ? `${rounds.length} รอบ • รวม ${fmt(sum)}` : "";
+    els.total.textContent = rounds.length ? `${rounds.length} รอบ • รวม ${fmt(sum)}` : "ยังไม่มีรอบ";
+    renderStrip();
+  }
+
+  // Compact row of round lengths on the main screen.
+  function renderStrip() {
+    els.strip.innerHTML = "";
+    if (!rounds.length) {
+      const li = document.createElement("li");
+      li.className = "empty-strip";
+      li.textContent = "แตะ แก้ไขรอบ เพื่อเพิ่ม";
+      els.strip.appendChild(li);
+    }
+    rounds.forEach((sec, i) => {
+      const li = document.createElement("li");
+      const m = Math.floor(sec / 60), r = sec % 60;
+      li.textContent = r ? `${m}:${String(r).padStart(2, "0")}` : String(m);
+      li.title = `รอบ ${i + 1}: ${fmtRound(sec)}`;
+      if (state !== "idle") {
+        if (i < idx || state === "finished") li.classList.add("done");
+        else if (i === idx) li.classList.add("current");
+      }
+      els.strip.appendChild(li);
+    });
+    els.editRoundsBtn.disabled = !canEdit();
+    const cur = els.strip.querySelector(".current");
+    if (cur) els.strip.scrollLeft = cur.offsetLeft - (els.strip.clientWidth - cur.offsetWidth) / 2;
   }
 
   function currentRemainingMs() {
@@ -537,6 +644,7 @@
   let dimTimer = null;
   function renderDim() {
     const show = settings.dim && active() && Date.now() >= revealedUntil;
+    if (show) [els.roundsSheet, els.settingsSheet].forEach((d) => d.open && d.close());
     els.dim.hidden = !show;
     document.body.classList.toggle("dimmed", show);
   }
@@ -631,6 +739,12 @@
     else start();
   };
   els.dim.onclick = reveal;
+  els.editRoundsBtn.onclick = () => { if (canEdit()) els.roundsSheet.showModal(); };
+  els.settingsBtn.onclick = () => els.settingsSheet.showModal();
+  [els.roundsSheet, els.settingsSheet].forEach((sheet) => {
+    sheet.querySelector("[data-close]").onclick = () => sheet.close();
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); }); // tap outside
+  });
   // Any tap while the controls are showing keeps them up a little longer.
   document.addEventListener("pointerdown", (e) => {
     if (active() && !els.dim.contains(e.target) && Date.now() < revealedUntil) reveal();
@@ -642,9 +756,9 @@
   // A row of one-choice buttons (radio group) that re-renders itself on pick.
   function choices(container, options, current, onPick, idPrefix) {
     container.innerHTML = "";
-    options.forEach(([value, label]) => {
+    options.forEach(([value, label, wide]) => {
       const b = document.createElement("button");
-      b.type = "button"; b.className = "sound"; b.id = `${idPrefix}-${value}`;
+      b.type = "button"; b.className = wide ? "sound wide" : "sound"; b.id = `${idPrefix}-${value}`;
       b.setAttribute("role", "radio");
       b.setAttribute("aria-checked", String(value === current()));
       b.textContent = label;
@@ -652,17 +766,22 @@
       container.appendChild(b);
     });
   }
-  const soundOptions = Object.entries(SOUNDS).map(([k, v]) => [k, v.label]);
+  const soundOptions = Object.entries(SOUNDS).map(([k, v]) => [k, v.label, v.wide]);
   choices(els.sounds, soundOptions, () => soundKey, (key) => {
     soundKey = key;
     try { localStorage.setItem(STORE_KEY + ":sound", key); } catch (_) {}
     chime(key);
   }, "sound");
-  choices(els.finalSounds, [["same", "เหมือนรอบอื่น"], ...soundOptions], () => settings.finalSound, (key) => {
+  choices(els.finalSounds, [["same", "เหมือนรอบอื่น", true], ...soundOptions], () => settings.finalSound, (key) => {
     settings.finalSound = key;
     saveSettings();
     chime(finalKey());
   }, "final");
+  choices(els.volumes, Object.entries(VOLUMES).map(([k, [label]]) => [k, label]), () => settings.volume, (k) => {
+    settings.volume = k;
+    saveSettings();
+    chime();
+  }, "volume");
   choices(els.preps, PREPS.map((n) => [n, n ? `${n} วิ` : "ไม่มี"]), () => settings.prep, (n) => {
     settings.prep = n;
     saveSettings();

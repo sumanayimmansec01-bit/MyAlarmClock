@@ -31,6 +31,22 @@ async function open(page, { rounds, sound, settings = { prep: 0, dim: false } } 
   return errors;
 }
 
+// Rounds and settings live in sheets that open from the main screen.
+// These run [act] with the sheet open, then close it again (the rounds sheet
+// stays open when it is showing an input error, so tests can read it).
+async function inRounds(page, act) {
+  const sheet = page.locator("#roundsSheet");
+  if (!(await sheet.evaluate((d) => d.open))) await page.locator("#editRoundsBtn").click();
+  await act();
+  if (await page.locator("#addError").isHidden()) await sheet.locator("[data-close]").click();
+}
+async function inSettings(page, act) {
+  const sheet = page.locator("#settingsSheet");
+  if (!(await sheet.evaluate((d) => d.open))) await page.locator("#settingsBtn").click();
+  await act();
+  await sheet.locator("[data-close]").click();
+}
+
 // The app ticks every 250 ms; step the fake clock a minute at a time so long
 // rounds stay fast to simulate while every tick still sees the time move on.
 async function advance(page, ms) {
@@ -71,8 +87,8 @@ test.describe("setup", () => {
     await open(page, { rounds: [] });
     const u = ui(page);
     await expect(u.start).toBeDisabled();
-    await page.getByRole("button", { name: "เพิ่มรอบ 15 นาที" }).click();
-    await page.getByRole("button", { name: "เพิ่มรอบ 45 นาที" }).click();
+    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 15 นาที" }).click());
+    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 45 นาที" }).click());
     await expect(u.rows).toHaveCount(2);
     await expect(u.rows.nth(1)).toContainText("45 นาที");
     await expect(u.time).toHaveText("15:00");
@@ -82,8 +98,7 @@ test.describe("setup", () => {
   test("typed list accepts minutes, decimals and min:sec", async ({ page }) => {
     await open(page, { rounds: [] });
     const u = ui(page);
-    await u.input.fill("30, 30 1.5 2:05");
-    await u.add.click();
+    await inRounds(page, async () => { await u.input.fill("30, 30 1.5 2:05"); await u.add.click(); });
     await expect(u.rows).toHaveCount(4);
     await expect(u.rows.nth(2)).toContainText("1:30 นาที");
     await expect(u.rows.nth(3)).toContainText("2:05 นาที");
@@ -94,8 +109,7 @@ test.describe("setup", () => {
     test(`rejects invalid input "${bad}"`, async ({ page }) => {
       await open(page, { rounds: [] });
       const u = ui(page);
-      await u.input.fill(bad);
-      await u.add.click();
+      await inRounds(page, async () => { await u.input.fill(bad); await u.add.click(); });
       await expect(u.error).toBeVisible();
       await expect(u.rows).toHaveCount(0);
     });
@@ -104,21 +118,21 @@ test.describe("setup", () => {
   test("deletes one round and clears all", async ({ page }) => {
     await open(page, { rounds: [600, 1200, 1800] });
     const u = ui(page);
-    await page.getByRole("button", { name: "ลบรอบ 2" }).click();
+    await inRounds(page, () => page.getByRole("button", { name: "ลบรอบ 2" }).click());
     await expect(u.rows).toHaveCount(2);
     await expect(u.rows.nth(1)).toContainText("30 นาที");
-    await u.clear.click();
+    await inRounds(page, () => u.clear.click());
     await expect(u.rows).toHaveCount(0);
     await expect(u.start).toBeDisabled();
   });
 
   test("remembers rounds and sound after reload", async ({ page }) => {
     await open(page, { rounds: [] });
-    await page.getByRole("button", { name: "เพิ่มรอบ 20 นาที" }).click();
-    await page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
+    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 20 นาที" }).click());
+    await inSettings(page, () => page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล", includeHidden: true }).click());
     await page.reload();
     await expect(ui(page).rows).toHaveCount(1);
-    await expect(page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล", includeHidden: true })).toHaveAttribute("aria-checked", "true");
   });
 });
 
@@ -206,11 +220,11 @@ test.describe("running", () => {
     await u.start.click();
     await advance(page, 2 * MIN + 500);
     await expect(u.label).toHaveText("ครบทุกรอบแล้ว");
-    await page.getByRole("button", { name: "ลบรอบ 2" }).click();
+    await inRounds(page, () => page.getByRole("button", { name: "ลบรอบ 2" }).click());
     await expect(u.rows).toHaveCount(1);
     await expect(u.label).toHaveText("พร้อมเริ่ม • 1 รอบ");
     await expect(u.time).toHaveText("01:00");
-    await page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click();
+    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click());
     await expect(u.rows).toHaveCount(2);
     await expect(u.start).toHaveText("เริ่ม");
     // rounds that have not run yet must not be struck through
@@ -225,14 +239,13 @@ test.describe("running", () => {
     await expect(u.label).toHaveText("ครบทุกรอบแล้ว");
     await expect(u.rows.nth(0)).toHaveClass(/done/);
 
-    await page.getByRole("button", { name: "เพิ่มรอบ 30 นาที" }).click();
+    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 30 นาที" }).click());
     await expect(u.rows).toHaveCount(2);
     await expect(page.locator("#rounds .row.done")).toHaveCount(0);
     await expect(u.rows.nth(1).locator(".m")).toHaveCSS("text-decoration-line", "none");
     await expect(u.label).toHaveText("พร้อมเริ่ม • 2 รอบ");
 
-    await u.input.fill("15, 15");
-    await u.add.click();
+    await inRounds(page, async () => { await u.input.fill("15, 15"); await u.add.click(); });
     await expect(page.locator("#rounds .row.done")).toHaveCount(0);
   });
 
@@ -250,34 +263,58 @@ test.describe("running", () => {
 });
 
 test.describe("sound", () => {
-  test("two-note chime is the default; bowl, wood, chime and beep are offered", async ({ page }) => {
+  test("the slow-rising bowl is the default; five sounds are offered", async ({ page }) => {
     await open(page);
-    await expect(page.locator("#sounds [role=radio]")).toHaveText(["ขันทิเบต (นุ่ม)", "ไม้เคาะ (นุ่ม)", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
-    await expect(page.locator("#sounds").getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
-    await page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" }).click();
-    await expect(page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#sounds [role=radio]")).toHaveText(["ขันค่อยๆ ดัง (นุ่มที่สุด)", "ขันทิเบต (นุ่ม)", "ไม้เคาะ (นุ่ม)", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
+    await expect(page.locator("#sounds").getByRole("radio", { name: "ขันค่อยๆ ดัง (นุ่มที่สุด)", includeHidden: true })).toHaveAttribute("aria-checked", "true");
+    await inSettings(page, () => page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล", includeHidden: true }).click());
+    await expect(page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล", includeHidden: true })).toHaveAttribute("aria-checked", "true");
     expect(await alerts(page)).toBe(1);
   });
 
   for (const removed of ["temple", "bell"]) {
-    test(`a saved "${removed}" choice falls back to the chime`, async ({ page }) => {
+    test(`a saved "${removed}" choice falls back to the default`, async ({ page }) => {
       await open(page, { sound: removed });
-      await expect(page.locator("#sounds").getByRole("radio", { name: "กริ๊ง 2 โน้ต" })).toHaveAttribute("aria-checked", "true");
+      await expect(page.locator("#sounds").getByRole("radio", { name: "ขันค่อยๆ ดัง (นุ่มที่สุด)", includeHidden: true })).toHaveAttribute("aria-checked", "true");
     });
   }
 
   test("test-sound button plays the chosen sound", async ({ page }) => {
     await open(page);
-    await page.getByRole("button", { name: /ทดสอบเสียง/ }).click();
+    await inSettings(page, () => page.getByRole("button", { name: /ทดสอบเสียง/ }).click());
     expect(await alerts(page)).toBe(1);
   });
 });
 
-test("layout fits the phone screen without sideways scroll", async ({ page }) => {
-  await open(page, { rounds: [1800, 1800, 3600, 5400] });
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
-  await expect(page.locator("#startBtn")).toBeInViewport();
+test("main screen fits one phone screen without scrolling", async ({ page }) => {
+  await open(page, { rounds: [1800, 1800, 3600, 5400, 2400, 2400, 2400, 2400] });
+  const size = await page.evaluate(() => ({
+    sideways: document.documentElement.scrollWidth - window.innerWidth,
+    down: document.documentElement.scrollHeight - window.innerHeight,
+  }));
+  expect(size.sideways).toBeLessThanOrEqual(0);
+  expect(size.down).toBeLessThanOrEqual(0);
+  for (const id of ["#settingsBtn", "#dial", "#editRoundsBtn", "#startBtn", "#resetBtn"]) {
+    await expect(page.locator(id)).toBeInViewport({ ratio: 1 });
+  }
+});
+
+test("fits a small 360 x 640 phone too", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await open(page, { rounds: [2400, 2400, 2400, 2400] });
+  expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  await expect(page.locator("#resetBtn")).toBeInViewport({ ratio: 1 });
+});
+
+test("the strip on the main screen shows each round and its progress", async ({ page }) => {
+  await open(page, { rounds: [60, 90, 1800] });
+  const pills = page.locator("#strip li");
+  await expect(pills).toHaveText(["1", "1:30", "30"]);
+  await ui(page).start.click();
+  await advance(page, 1 * MIN + 500);
+  await expect(pills.nth(0)).toHaveClass(/done/);
+  await expect(pills.nth(1)).toHaveClass(/current/);
+  await expect(page.locator("#editRoundsBtn")).toBeDisabled();
 });
 
 test("start fills the row, reset is small, each round has a delete button", async ({ page }) => {
@@ -285,11 +322,12 @@ test("start fills the row, reset is small, each round has a delete button", asyn
   const u = ui(page);
   const start = await u.start.boundingBox();
   const reset = await u.reset.boundingBox();
-  const panel = await page.locator("section.panel").first().boundingBox();
-  expect(Math.abs(start.width - panel.width)).toBeLessThanOrEqual(1);
+  const app = await page.locator(".app").boundingBox();
+  expect(Math.abs(start.width - app.width)).toBeLessThanOrEqual(1);
   expect(reset.height).toBeLessThan(start.height / 1.5);
   expect(reset.width).toBeLessThan(start.width / 2);
 
+  await page.locator("#editRoundsBtn").click();
   for (let i = 1; i <= 3; i++) {
     await expect(page.getByRole("button", { name: `ลบรอบ ${i}` })).toBeVisible();
     await expect(page.getByRole("button", { name: `ลบรอบ ${i}` })).toHaveText("ลบ");
@@ -297,6 +335,19 @@ test("start fills the row, reset is small, each round has a delete button", asyn
   await page.getByRole("button", { name: "ลบรอบ 3" }).click();
   await expect(u.rows).toHaveCount(2);
   await expect(u.total).toHaveText("2 รอบ • รวม 1:00:00");
+});
+
+test("sheets close with Done or a tap outside", async ({ page }) => {
+  await open(page);
+  const sheet = page.locator("#settingsSheet");
+  await page.locator("#settingsBtn").click();
+  await expect(sheet).toBeVisible();
+  await sheet.locator("[data-close]").click();
+  await expect(sheet).toBeHidden();
+  await page.locator("#editRoundsBtn").click();
+  await expect(page.locator("#roundsSheet")).toBeVisible();
+  await page.mouse.click(10, 10); // backdrop above the sheet
+  await expect(page.locator("#roundsSheet")).toBeHidden();
 });
 
 test("pause and resume buttons use different colours from start and each other", async ({ page }) => {
@@ -412,7 +463,7 @@ test.describe("screen stays on", () => {
 test("quick-add buttons are 15, 20, 30, 40, 45, 60 minutes", async ({ page }) => {
   await open(page, { rounds: [] });
   await expect(page.locator("#chips .chip")).toHaveText(["+15", "+20", "+30", "+40", "+45", "+60"]);
-  await page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click();
+  await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click());
   await expect(ui(page).rows.nth(0)).toContainText("40 นาที");
 });
 
@@ -457,10 +508,10 @@ test.describe("countdown before the first round", () => {
 
   test("the choice is remembered", async ({ page }) => {
     await open(page, { rounds: [600], settings: null });
-    await expect(page.locator("#preps").getByRole("radio", { name: "10 วิ" })).toHaveAttribute("aria-checked", "true");
-    await page.locator("#preps").getByRole("radio", { name: "ไม่มี" }).click();
+    await expect(page.locator("#preps").getByRole("radio", { name: "10 วิ", includeHidden: true })).toHaveAttribute("aria-checked", "true");
+    await inSettings(page, () => page.locator("#preps").getByRole("radio", { name: "ไม่มี", includeHidden: true }).click());
     await page.reload();
-    await expect(page.locator("#preps").getByRole("radio", { name: "ไม่มี" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#preps").getByRole("radio", { name: "ไม่มี", includeHidden: true })).toHaveAttribute("aria-checked", "true");
   });
 });
 
@@ -503,8 +554,8 @@ test.describe("dim screen", () => {
   test("can be switched off", async ({ page }) => {
     await open(page, { rounds: [600], settings: null });
     await expect(page.locator("#dimToggle")).toBeChecked();
-    await page.locator("#dimToggle").uncheck();
-    await page.locator("#preps").getByRole("radio", { name: "ไม่มี" }).click();
+    await inSettings(page, () => page.locator("#dimToggle").uncheck());
+    await inSettings(page, () => page.locator("#preps").getByRole("radio", { name: "ไม่มี", includeHidden: true }).click());
     await ui(page).start.click();
     await expect(dim(page)).toBeHidden();
   });
@@ -535,18 +586,18 @@ test.describe("alert sounds", () => {
     expect(last.every((t) => t.type === "square" && t.freq === 1760)).toBe(true);
   });
 
-  test("final sound defaults to the singing bowl and is remembered", async ({ page }) => {
+  test("final sound defaults to 'same as other rounds' and is remembered", async ({ page }) => {
     await open(page, { settings: null });
     const final = page.locator("#finalSounds");
-    await expect(final.getByRole("radio")).toHaveText(["เหมือนรอบอื่น", "ขันทิเบต (นุ่ม)", "ไม้เคาะ (นุ่ม)", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
-    await expect(final.getByRole("radio", { name: "ขันทิเบต (นุ่ม)" })).toHaveAttribute("aria-checked", "true");
-    await final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)" }).click();
+    await expect(final.getByRole("radio", { includeHidden: true })).toHaveText(["เหมือนรอบอื่น", "ขันค่อยๆ ดัง (นุ่มที่สุด)", "ขันทิเบต (นุ่ม)", "ไม้เคาะ (นุ่ม)", "กริ๊ง 2 โน้ต", "บี๊บดิจิทัล"]);
+    await expect(final.getByRole("radio", { name: "เหมือนรอบอื่น", includeHidden: true })).toHaveAttribute("aria-checked", "true");
+    await inSettings(page, () => final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)", includeHidden: true }).click());
     await page.reload();
-    await expect(final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)" })).toHaveAttribute("aria-checked", "true");
+    await expect(final.getByRole("radio", { name: "ไม้เคาะ (นุ่ม)", includeHidden: true })).toHaveAttribute("aria-checked", "true");
   });
 
   // How many notes one strike of each sound is made of.
-  const NOTES = { bowl: 8, wood: 4, chime: 2, beep: 3 };
+  const NOTES = { rise: 6, bowl: 8, wood: 4, chime: 2, beep: 3 };
   for (const [key, notes] of Object.entries(NOTES)) {
     test(`${key} plays once and stops`, async ({ page }) => {
       await page.addInitScript(() => {
@@ -555,7 +606,7 @@ test.describe("alert sounds", () => {
         window.AudioContext = function () { return window.__off; };
       });
       await open(page, { sound: key });
-      await page.locator("#testSound").click();
+      await inSettings(page, () => page.locator("#testSound").click());
       expect((await tones(page)).length).toBe(notes);
       const { peak, seconds } = await page.evaluate(async () => {
         const d = (await window.__off.startRendering()).getChannelData(0);
@@ -568,9 +619,53 @@ test.describe("alert sounds", () => {
         return { peak, seconds: last / 44100 };
       });
       expect(peak).toBeLessThanOrEqual(1);
-      expect(seconds).toBeLessThanOrEqual(key === "bowl" ? 4.5 : 1.5);
+      expect(seconds).toBeLessThanOrEqual({ rise: 10, bowl: 4.5 }[key] ?? 1.5);
     });
   }
+
+  test("the rising bowl starts from silence so it does not startle", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__off = new OfflineAudioContext(1, 44100 * 12, 44100);
+      window.__off.resume = () => Promise.resolve();
+      window.AudioContext = function () { return window.__off; };
+    });
+    await open(page, { sound: "rise", settings: { prep: 0, dim: false, volume: "loud" } });
+    await inSettings(page, () => page.locator("#testSound").click());
+    const loudness = await page.evaluate(async () => {
+      const d = (await window.__off.startRendering()).getChannelData(0);
+      const peakIn = (from, to) => { let p = 0; for (let i = from * 44100; i < to * 44100; i++) p = Math.max(p, Math.abs(d[i])); return p; };
+      return { first: peakIn(0, 0.5), loudest: peakIn(0, 10) };
+    });
+    expect(loudness.first).toBeLessThan(loudness.loudest * 0.2);
+  });
+
+  test("volume setting scales the alert and is remembered", async ({ page }) => {
+    const peakFor = async (volume) => {
+      const p = await page.context().newPage();
+      await p.addInitScript(() => {
+        window.__off = new OfflineAudioContext(1, 44100 * 3, 44100);
+        window.__off.resume = () => Promise.resolve();
+        window.AudioContext = function () { return window.__off; };
+      });
+      await open(p, { sound: "chime", settings: { prep: 0, dim: false, volume } });
+      return p.evaluate(async () => {
+        document.getElementById("testSound").click();
+        const d = (await window.__off.startRendering()).getChannelData(0);
+        return d.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+      });
+    };
+    await open(page, { settings: null });
+    const volumes = page.locator("#volumes");
+    await expect(volumes.getByRole("radio", { includeHidden: true })).toHaveText(["เบา", "กลาง", "ดัง"]);
+    await expect(volumes.getByRole("radio", { name: "กลาง", includeHidden: true })).toHaveAttribute("aria-checked", "true");
+    await inSettings(page, () => volumes.getByRole("radio", { name: "เบา", includeHidden: true }).click());
+    await page.reload();
+    await expect(volumes.getByRole("radio", { name: "เบา", includeHidden: true })).toHaveAttribute("aria-checked", "true");
+
+    // (these pages share storage with the one above, so they run last)
+    const soft = await peakFor("soft"), loud = await peakFor("loud");
+    expect(soft).toBeLessThan(loud * 0.5);
+  });
 
   test("there is no alert-length setting", async ({ page }) => {
     await open(page);
