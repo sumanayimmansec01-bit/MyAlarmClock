@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2f5fd0">
+<meta name="theme-color" content="#f7f8f6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="จับเวลา">
@@ -15,198 +15,181 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap">
 <style>
-  /* Layout: one phone screen, no scrolling — dial, round strip, start button.
-     Rounds and settings open as sheets from the bottom. */
+  /* Layout D: one calm screen — a thin ring, a strip of rounds sized by length,
+     and one round start button. Settings and round edits open as bottom sheets. */
   :root {
-    --bg: #eef1f5;
-    --surface: #ffffff;
-    --fg: #16202b;
-    --muted: #5d6b7a;
-    --line: #d5dce5;
-    --accent: #2f5fd0;
-    --accent-soft: #e2eafb;
-    --done: #2e8a5a;
-    --track: #dfe5ee;
-    --danger: #c0392b;
-    --pause: #b8660c;
-    --pause-fg: #ffffff;
-    --resume: #2e8a5a;
-    --resume-fg: #ffffff;
-    --font-display: "Chakra Petch", "IBM Plex Sans Thai", system-ui, sans-serif;
-    --font-body: "IBM Plex Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --bg: #f7f8f6;
+    --card: #ffffff;
+    --ink: #1f2a28;
+    --soft: #6f7b78;
+    --hair: #e1e6e3;
+    --sage: #3f8f7f;
+    --sage-soft: #e3f1ed;
+    --on-sage: #ffffff;
+    --pause: #c9772a;
+    --resume: #3d78a8;
+    --danger: #c0533f;
+    --font: "Prompt", "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #10161e; --surface: #18212c; --fg: #e6ecf3; --muted: #93a2b3; --line: #2a3644;
-      --accent: #7ea2ff; --accent-soft: #1f2c47; --done: #5cc58f; --track: #25303d; --danger: #ff8a7a;
-      --pause: #f0a640; --pause-fg: #1a1206; --resume: #5cc58f; --resume-fg: #08190f;
+      --bg: #121816; --card: #1a2220; --ink: #e8eeec; --soft: #94a29e; --hair: #28322f;
+      --sage: #6cc3b0; --sage-soft: #1d3530; --on-sage: #0d1a17;
+      --pause: #f0aa5c; --resume: #7fb4e0; --danger: #f08a78;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #10161e; --surface: #18212c; --fg: #e6ecf3; --muted: #93a2b3; --line: #2a3644;
-    --accent: #7ea2ff; --accent-soft: #1f2c47; --done: #5cc58f; --track: #25303d; --danger: #ff8a7a;
-    --pause: #f0a640; --pause-fg: #1a1206; --resume: #5cc58f; --resume-fg: #08190f;
+    --bg: #121816; --card: #1a2220; --ink: #e8eeec; --soft: #94a29e; --hair: #28322f;
+    --sage: #6cc3b0; --sage-soft: #1d3530; --on-sage: #0d1a17;
+    --pause: #f0aa5c; --resume: #7fb4e0; --danger: #f08a78;
     color-scheme: dark;
   }
 
   html { height: 100%; box-sizing: border-box; }
   body {
-    box-sizing: border-box; height: 100%; overflow: hidden;
-    background: var(--bg); color: var(--fg);
-    font-family: var(--font-body); font-size: 16px; line-height: 1.5;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 12px 16px;
+    box-sizing: border-box; height: 100%; overflow: hidden; margin: 0;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--font); font-size: 16px; line-height: 1.45;
+    padding-left: max(18px, env(safe-area-inset-left, 0px));
+    padding-right: max(18px, env(safe-area-inset-right, 0px));
+    padding-block: 14px 18px;
     -webkit-tap-highlight-color: transparent;
   }
-  .app {
-    max-width: 440px; height: 100%; margin: 0 auto;
-    display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
+  button { font: inherit; color: inherit; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--sage); outline-offset: 2px; }
+  .app { max-width: 420px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
+
+  header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  h1 { margin: 0; font-size: .95rem; font-weight: 400; color: var(--soft); }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--hair); background: var(--card);
+    display: grid; place-items: center; font-size: 1.05rem; cursor: pointer; color: var(--soft);
   }
 
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  h1 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; margin: 0; letter-spacing: .01em; }
-  .ghost-btn {
-    background: none; border: 1px solid var(--line); color: var(--muted);
-    font: inherit; font-size: .85rem; padding: 6px 12px; border-radius: 999px; cursor: pointer;
-  }
-
-  /* Dial */
-  .dial { position: relative; width: min(78vw, 300px, 40dvh); aspect-ratio: 1; max-width: 100%; margin: 0 auto; flex: none; }
+  /* Ring */
+  .dial { position: relative; width: min(76vw, 300px, 38dvh); aspect-ratio: 1; max-width: 100%; margin-top: auto; flex: none; }
   .dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .dial .track { fill: none; stroke: var(--track); stroke-width: 10; }
-  .dial .prog { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
-  .dial.finished .prog { stroke: var(--done); }
-  .dial-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
-  .round-label { font-size: .9rem; color: var(--muted); font-weight: 500; }
-  .time { font-family: var(--font-display); font-weight: 600; font-size: clamp(3rem, 15vw, 4.2rem); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-  .end-at { font-size: .85rem; color: var(--muted); min-height: 1.3em; }
-  .dial.finished .round-label { color: var(--done); font-weight: 600; }
+  .dial circle { fill: none; stroke-width: 4.5; }
+  .dial .track { stroke: var(--hair); }
+  .dial .prog { stroke: var(--sage); stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
+  .dial-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; padding: 0 12%; }
+  .round-label, .end-at { font-size: .82rem; color: var(--soft); }
+  .end-at { min-height: 1.2em; }
+  .time { font-weight: 300; font-size: clamp(2.8rem, 14vw, 3.8rem); line-height: 1.05; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+  .dial.finished .round-label { color: var(--sage); font-weight: 500; }
 
-  /* Controls */
-  .controls { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .controls .btn.primary { width: 100%; font-size: 1.15rem; padding: 18px; }
-  /* running shows an amber Pause, paused shows a green Resume */
-  #startBtn[data-action="pause"] { background: var(--pause); border-color: var(--pause); color: var(--pause-fg); }
-  #startBtn[data-action="resume"] { background: var(--resume); border-color: var(--resume); color: var(--resume-fg); }
-  .reset-btn { font-size: .85rem; padding: 6px 16px; }
-  .reset-btn:disabled { opacity: .4; cursor: default; }
-  .btn {
-    font: inherit; font-weight: 600; font-size: 1.05rem; border-radius: 16px; padding: 16px; cursor: pointer;
-    border: 1px solid var(--line); background: var(--surface); color: var(--fg);
-  }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-  .btn:disabled { opacity: .45; cursor: default; }
-  .btn:focus-visible, .ghost-btn:focus-visible, .chip:focus-visible, input:focus-visible, .row button:focus-visible {
-    outline: 3px solid var(--accent); outline-offset: 2px;
-  }
-
-  /* Setup */
-  section.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-  .panel h2 { margin: 0; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .total { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-
-  .rounds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 12px; border: 1px solid var(--line); }
-  .row .n { font-size: .8rem; color: var(--muted); }
-  .row .m { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
-  .row button { background: none; border: 1px solid var(--danger); color: var(--danger); font: inherit; font-size: .85rem; font-weight: 500; min-height: 36px; padding: 0 12px; border-radius: 10px; cursor: pointer; }
-  .row button:active { background: var(--bg); }
-  .row.current { border-color: var(--accent); background: var(--accent-soft); }
-  .row.done .m { color: var(--muted); text-decoration: line-through; }
-  .row.done .n::after { content: " ✓"; color: var(--done); }
-  .empty { color: var(--muted); font-size: .9rem; margin: 0; }
-
-  .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .sounds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .sound { font: inherit; font-weight: 500; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; }
-  .sound::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
-  .sound[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
-  .sound[aria-checked="true"]::before { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px var(--accent-soft); }
-  .sound:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  .chip { font: inherit; font-weight: 500; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; font-variant-numeric: tabular-nums; }
-  .chip:active { background: var(--accent-soft); }
-
-  .add-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-  .add-row input {
-    font: inherit; font-size: 1rem; padding: 12px 14px; border-radius: 12px; min-width: 0;
-    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
-  }
-  .add-row .btn { padding: 12px 18px; font-size: 1rem; border-radius: 12px; }
-  .hint { font-size: .82rem; color: var(--muted); margin: 0; }
-  .error { color: var(--danger); font-size: .85rem; margin: 0; }
-
-  .wake { align-self: center; font: inherit; font-size: .85rem; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: default; }
+  .wake { margin-top: 10px; font-size: .78rem; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--hair); background: var(--card); color: var(--soft); cursor: default; }
   .wake[data-state="denied"], .wake[data-state="unsupported"] { color: var(--pause); border-color: var(--pause); }
   .wake[data-state="denied"] { cursor: pointer; }
-  .note { font-size: .82rem; color: var(--muted); margin: 0; text-align: center; }
 
-  body.running .setup-only { opacity: .5; pointer-events: none; }
-
-  /* Round strip on the main screen */
-  .strip-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .strip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .strip { position: relative; list-style: none; margin: 0; padding: 0 0 2px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-  .strip li {
-    flex: none; min-width: 44px; padding: 4px 10px; border-radius: 999px; text-align: center;
-    border: 1px solid var(--line); background: var(--surface);
-    font-family: var(--font-display); font-weight: 600; font-variant-numeric: tabular-nums;
+  /* Round strip: one segment per round, as wide as its share of the time */
+  .rounds-wrap { width: 100%; margin-top: max(14px, 3dvh); display: flex; flex-direction: column; gap: 8px; }
+  .rounds-head { display: flex; justify-content: space-between; gap: 8px; font-size: .8rem; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .strip { display: flex; gap: 6px; align-items: flex-start; }
+  .seg {
+    flex: var(--w) 1 0; min-width: 22px; padding: 4px 0 0; border: 0; background: none; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
   }
-  .strip li.current { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-  .strip li.done { color: var(--muted); text-decoration: line-through; }
-  .strip .empty-strip { border-style: dashed; color: var(--muted); font-family: var(--font-body); font-weight: 400; }
-  .ghost-btn:disabled { opacity: .4; cursor: default; }
+  .seg:disabled { cursor: default; }
+  .seg .bar { width: 100%; height: 10px; border-radius: 5px; background: var(--hair); overflow: hidden; }
+  .seg .bar i { display: block; height: 100%; width: var(--p, 0%); background: var(--sage); border-radius: 5px; }
+  .seg .min { font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%; }
+  .seg.done .min { color: var(--soft); }
+  .seg.current .min { color: var(--sage); font-weight: 500; }
+  .seg.add { flex: 0 0 36px; color: var(--sage); }
+  .seg.add .bar { background: none; border: 1.5px dashed var(--hair); box-sizing: border-box; }
+  .seg.add .min { font-size: 1.05rem; line-height: 1; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .empty-hint { font-size: .85rem; color: var(--soft); align-self: center; }
+
+  /* Start */
+  .controls { margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .start { border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .start .go {
+    width: 76px; height: 76px; border-radius: 50%; background: var(--sage); color: var(--on-sage);
+    display: grid; place-items: center; font-size: 1.5rem; line-height: 1;
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--sage) 30%, transparent);
+  }
+  .start .go::before { content: "▶"; margin-left: 4px; }
+  .start[data-action="pause"] .go { background: var(--pause); box-shadow: 0 8px 22px color-mix(in srgb, var(--pause) 30%, transparent); }
+  .start[data-action="pause"] .go::before { content: "❚❚"; margin: 0; letter-spacing: -3px; font-size: 1.2rem; }
+  .start[data-action="resume"] .go { background: var(--resume); box-shadow: 0 8px 22px color-mix(in srgb, var(--resume) 30%, transparent); }
+  .start[data-action="skip"] .go::before { content: "⏭"; margin: 0; }
+  .start .label { font-size: .9rem; color: var(--soft); }
+  .start:disabled { opacity: .4; cursor: default; }
+  .start:disabled .go { box-shadow: none; }
+  .reset { border: 0; background: none; color: var(--soft); font-size: .82rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 4px 8px; }
+  .reset:disabled { visibility: hidden; }
 
   /* Bottom sheets */
   dialog.sheet {
-    width: 100%; max-width: 480px; max-height: 88dvh; margin: auto auto 0; padding: 0;
-    border: 0; border-radius: 22px 22px 0 0; background: var(--surface); color: var(--fg);
+    width: 100%; max-width: 460px; max-height: 88dvh; margin: auto auto 0; padding: 0;
+    border: 0; border-radius: 24px 24px 0 0; background: var(--card); color: var(--ink);
     display: flex; flex-direction: column;
   }
   dialog.sheet:not([open]) { display: none; }
-  dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
-  .sheet-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 14px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
-    border-bottom: 1px solid var(--line);
-  }
-  .sheet-head h2 { margin: 0; font-size: 1.05rem; }
-  .sheet-head .done-btn { font: inherit; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 6px 4px; cursor: pointer; }
+  dialog.sheet::backdrop { background: rgb(0 0 0 / .35); }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 8px; }
+  .sheet-head h2 { margin: 0; font-size: 1.05rem; font-weight: 500; }
+  .text-btn { border: 0; background: none; color: var(--sage); font-weight: 500; padding: 6px 4px; cursor: pointer; }
   .sheet-body {
-    overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
-    padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    padding: 8px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
   }
-  .sheet-body h3.group { margin: 6px 0 0; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .group { margin: 10px 0 0; font-size: .78rem; font-weight: 500; letter-spacing: .06em; color: var(--soft); }
+  .sub { margin: 2px 0 -4px; font-size: .9rem; font-weight: 500; }
 
-  .sub { margin: 4px 0 -4px; font-size: .9rem; font-weight: 600; color: var(--fg); }
-  .sounds.final > :first-child { grid-column: 1 / -1; }
-  .sounds > .wide { grid-column: 1 / -1; }
-  .sounds.seg { grid-template-columns: repeat(4, 1fr); }
-  .sounds.seg.three { grid-template-columns: repeat(3, 1fr); }
-  .sounds.seg .sound { justify-content: center; padding: 10px 4px; }
-  .sounds.seg .sound::before { display: none; }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 20px; }
+  .stepper output { font-size: 2.4rem; font-weight: 300; min-width: 150px; text-align: center; font-variant-numeric: tabular-nums; }
+  .step { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--hair); background: var(--bg); color: var(--sage); font-size: 1.4rem; cursor: pointer; }
+  .step:disabled { opacity: .35; cursor: default; }
+  .quick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .quick button { border: 1px solid transparent; border-radius: 12px; background: var(--bg); padding: 8px 0; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .quick button[aria-pressed="true"] { background: var(--sage-soft); color: var(--sage); border-color: var(--sage); font-weight: 500; }
+  .type-row input {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: .95rem; padding: 10px 14px; border-radius: 12px;
+    border: 1px solid var(--hair); background: var(--bg); color: var(--ink);
+  }
+  .error { color: var(--danger); font-size: .85rem; margin: 0; }
+  .sheet-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 4px; }
+  .sheet-actions .left { display: flex; gap: 14px; }
+  .danger-link { border: 0; background: none; color: var(--danger); font-size: .88rem; padding: 6px 0; cursor: pointer; }
+  .pill-btn { border: 0; border-radius: 999px; background: var(--sage); color: var(--on-sage); padding: 10px 26px; font-weight: 500; cursor: pointer; }
 
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .choices.four { grid-template-columns: repeat(4, 1fr); }
+  .choices.three { grid-template-columns: repeat(3, 1fr); }
+  .choice {
+    border: 1px solid var(--hair); border-radius: 14px; background: var(--bg); padding: 10px 12px; cursor: pointer; text-align: left;
+    display: flex; align-items: center; gap: 8px; font-size: .92rem;
+  }
+  .choice::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--hair); flex: none; }
+  .choice[aria-checked="true"] { border-color: var(--sage); background: var(--sage-soft); }
+  .choice[aria-checked="true"]::before { border-color: var(--sage); background: var(--sage); box-shadow: inset 0 0 0 2px var(--sage-soft); }
+  .choice.wide { grid-column: 1 / -1; }
+  .choices.four .choice, .choices.three .choice { justify-content: center; padding: 9px 4px; }
+  .choices.four .choice::before, .choices.three .choice::before { display: none; }
+  .soft-btn { border: 1px solid var(--hair); border-radius: 14px; background: var(--bg); padding: 11px; cursor: pointer; font-weight: 500; }
   .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
-  .toggle span { display: flex; flex-direction: column; font-weight: 500; }
-  .toggle small { font-size: .8rem; font-weight: 400; color: var(--muted); }
-  .toggle input { width: 46px; height: 26px; accent-color: var(--accent); flex: none; }
+  .toggle span { display: flex; flex-direction: column; }
+  .toggle small { font-size: .8rem; color: var(--soft); }
+  .toggle input { width: 44px; height: 24px; accent-color: var(--sage); flex: none; }
+  .note { font-size: .8rem; color: var(--soft); margin: 6px 0 0; }
 
   /* Dim screen: deliberately black in both themes, with a faint clock. */
   .dim {
-    position: fixed; inset: 0; z-index: 50; background: #000; color: #4b525c;
+    position: fixed; inset: 0; z-index: 50; background: #000; color: #4b5552;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
     padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px));
     cursor: pointer; user-select: none;
   }
-  .dim-time { font-family: var(--font-display); font-size: 3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dim-time { font-size: 3rem; font-weight: 300; font-variant-numeric: tabular-nums; }
   .dim-label { font-size: .9rem; }
-  .dim-hint { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); font-size: .8rem; color: #2c3138; }
+  .dim-hint { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); font-size: .8rem; color: #2c3331; }
   .dim-hint.warn { color: #8a5a1c; }
-  body.dimmed { overflow: hidden; }
 
   @media (prefers-reduced-motion: reduce) { .dial .prog { transition: none; } }
 </style>
@@ -216,13 +199,13 @@
 <div class="app">
   <header>
     <h1>จับเวลาหลายรอบ</h1>
-    <button class="ghost-btn" id="settingsBtn" type="button">⚙️ ตั้งค่า</button>
+    <button class="icon-btn" id="settingsBtn" type="button" aria-label="ตั้งค่า">⚙</button>
   </header>
 
   <div class="dial" id="dial">
     <svg viewBox="0 0 120 120" aria-hidden="true">
-      <circle class="track" cx="60" cy="60" r="52"></circle>
-      <circle class="prog" id="prog" cx="60" cy="60" r="52"></circle>
+      <circle class="track" cx="60" cy="60" r="55"></circle>
+      <circle class="prog" id="prog" cx="60" cy="60" r="55" stroke-dasharray="345.58" stroke-dashoffset="345.58"></circle>
     </svg>
     <div class="dial-center">
       <div class="round-label" id="roundLabel">พร้อมเริ่ม</div>
@@ -233,64 +216,67 @@
 
   <button class="wake" id="wake" type="button" hidden></button>
 
-  <section class="strip-wrap" aria-label="รอบที่ตั้งไว้">
-    <div class="strip-head">
-      <span class="total" id="total"></span>
-      <button class="ghost-btn" id="editRoundsBtn" type="button">✎ แก้ไขรอบ</button>
-    </div>
-    <ol class="strip" id="strip"></ol>
+  <section class="rounds-wrap" aria-label="รอบที่ตั้งไว้">
+    <div class="rounds-head"><span id="total"></span><span id="finishAt"></span></div>
+    <div class="strip" id="strip"></div>
   </section>
 
   <div class="controls">
-    <button class="btn primary" id="startBtn" type="button">เริ่ม</button>
-    <button class="ghost-btn reset-btn" id="resetBtn" type="button">↺ รีเซ็ต</button>
+    <button class="start" id="startBtn" type="button"><span class="go" aria-hidden="true"></span><span class="label" id="startLabel">เริ่ม</span></button>
+    <button class="reset" id="resetBtn" type="button">เลิก แล้วเริ่มใหม่</button>
   </div>
 </div>
 
-<dialog class="sheet" id="roundsSheet" aria-labelledby="roundsTitle">
+<dialog class="sheet" id="roundSheet" aria-labelledby="roundTitle">
   <div class="sheet-head">
-    <h2 id="roundsTitle">รอบที่ตั้งไว้</h2>
-    <button class="done-btn" type="button" data-close>เสร็จ</button>
+    <h2 id="roundTitle">รอบที่ 1</h2>
+    <button class="text-btn" type="button" id="roundCancel">ยกเลิก</button>
   </div>
-  <div class="sheet-body">
-    <ol class="rounds" id="rounds"></ol>
-    <div class="setup-only" style="display:flex;flex-direction:column;gap:14px">
-      <div class="chips" id="chips"></div>
-      <form class="add-row" id="addForm" autocomplete="off">
-        <input id="addInput" inputmode="text" placeholder="เช่น 30, 30 หรือ 1:30" aria-label="นาทีที่ต้องการเพิ่ม">
-        <button class="btn" type="submit">เพิ่ม</button>
-      </form>
-      <p class="hint">ใส่ได้หลายรอบพร้อมกัน คั่นด้วยจุลภาค เช่น <b>30, 30</b> • ใส่วินาทีได้แบบ <b>นาที:วินาที</b></p>
-      <p class="error" id="addError" hidden></p>
-      <button class="ghost-btn" id="clearBtn" type="button" style="align-self:flex-start">ลบทุกรอบ</button>
+  <form class="sheet-body" id="roundForm" autocomplete="off">
+    <div class="stepper">
+      <button class="step" type="button" id="stepDown" aria-label="ลด 5 นาที">−</button>
+      <output id="draft">40 นาที</output>
+      <button class="step" type="button" id="stepUp" aria-label="เพิ่ม 5 นาที">+</button>
     </div>
-  </div>
+    <div class="quick" id="quick"></div>
+    <div class="type-row">
+      <input id="roundInput" inputmode="text" placeholder="หรือพิมพ์ เช่น 25 หรือ 1:30 หรือ 30, 30" aria-label="พิมพ์เวลาเอง">
+    </div>
+    <p class="error" id="roundError" hidden></p>
+    <div class="sheet-actions">
+      <div class="left">
+        <button class="danger-link" type="button" id="deleteRound">ลบรอบนี้</button>
+        <button class="danger-link" type="button" id="clearBtn">ลบทุกรอบ</button>
+      </div>
+      <button class="pill-btn" type="submit" id="saveRound">บันทึก</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog class="sheet" id="settingsSheet" aria-labelledby="settingsTitle">
   <div class="sheet-head">
     <h2 id="settingsTitle">ตั้งค่า</h2>
-    <button class="done-btn" type="button" data-close>เสร็จ</button>
+    <button class="text-btn" type="button" data-close>เสร็จ</button>
   </div>
   <div class="sheet-body">
-    <h3 class="group">เสียงเตือน • แตะเพื่อฟังตัวอย่าง</h3>
+    <h3 class="group">เสียงเตือน • แตะเพื่อฟัง</h3>
     <h3 class="sub" id="soundsLabel">จบแต่ละรอบ</h3>
-    <div class="sounds" id="sounds" role="radiogroup" aria-labelledby="soundsLabel"></div>
+    <div class="choices" id="sounds" role="radiogroup" aria-labelledby="soundsLabel"></div>
     <h3 class="sub" id="finalLabel">จบรอบสุดท้าย</h3>
-    <div class="sounds final" id="finalSounds" role="radiogroup" aria-labelledby="finalLabel"></div>
+    <div class="choices" id="finalSounds" role="radiogroup" aria-labelledby="finalLabel"></div>
     <h3 class="sub" id="volumeLabel">ความดัง</h3>
-    <div class="sounds seg three" id="volumes" role="radiogroup" aria-labelledby="volumeLabel"></div>
-    <button class="btn" id="testSound" type="button">🔔 ทดสอบเสียง</button>
+    <div class="choices three" id="volumes" role="radiogroup" aria-labelledby="volumeLabel"></div>
+    <button class="soft-btn" id="testSound" type="button">🔔 ทดสอบเสียง</button>
 
     <h3 class="group">ระหว่างนั่ง</h3>
     <h3 class="sub" id="prepLabel">นับถอยหลังก่อนเริ่มรอบแรก</h3>
-    <div class="sounds seg" id="preps" role="radiogroup" aria-labelledby="prepLabel"></div>
+    <div class="choices four" id="preps" role="radiogroup" aria-labelledby="prepLabel"></div>
     <label class="toggle" for="dimToggle">
       <span>จอมืดระหว่างจับเวลา<small>เหลือแค่เวลาตัวจาง แตะจอเพื่อแสดงปุ่ม</small></span>
       <input type="checkbox" id="dimToggle" role="switch">
     </label>
 
-    <p class="note">ครบแต่ละรอบจะมีเสียงเตือน แล้วเริ่มรอบถัดไปเอง ครบรอบสุดท้ายหยุดเอง • ระหว่างจับเวลาแอพจะกันหน้าจอดับให้ ควรเปิดหน้านี้ค้างไว้ และเปิดเสียงสื่อของมือถือไว้</p>
+    <p class="note">ระหว่างจับเวลา เปิดหน้านี้ค้างไว้และเปิดเสียงสื่อของมือถือไว้ แอพจะกันจอดับให้</p>
   </div>
 </dialog>
 
@@ -306,15 +292,18 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     dial: $("dial"), prog: $("prog"), roundLabel: $("roundLabel"), time: $("time"), endAt: $("endAt"),
-    startBtn: $("startBtn"), resetBtn: $("resetBtn"), rounds: $("rounds"), total: $("total"),
-    chips: $("chips"), addForm: $("addForm"), addInput: $("addInput"), addError: $("addError"),
-    clearBtn: $("clearBtn"), testSound: $("testSound"), sounds: $("sounds"), wake: $("wake"),
+    startBtn: $("startBtn"), startLabel: $("startLabel"), resetBtn: $("resetBtn"),
+    total: $("total"), finishAt: $("finishAt"), strip: $("strip"),
+    testSound: $("testSound"), sounds: $("sounds"), wake: $("wake"),
     finalSounds: $("finalSounds"), preps: $("preps"), dimToggle: $("dimToggle"),
     dim: $("dim"), dimTime: $("dimTime"), dimLabel: $("dimLabel"), dimHint: $("dimHint"),
-    strip: $("strip"), editRoundsBtn: $("editRoundsBtn"), settingsBtn: $("settingsBtn"),
-    roundsSheet: $("roundsSheet"), settingsSheet: $("settingsSheet"), volumes: $("volumes"),
+    settingsBtn: $("settingsBtn"), settingsSheet: $("settingsSheet"), volumes: $("volumes"),
+    roundSheet: $("roundSheet"), roundTitle: $("roundTitle"), roundForm: $("roundForm"), roundCancel: $("roundCancel"),
+    draft: $("draft"), stepDown: $("stepDown"), stepUp: $("stepUp"), quick: $("quick"),
+    roundInput: $("roundInput"), roundError: $("roundError"), deleteRound: $("deleteRound"),
+    clearBtn: $("clearBtn"), saveRound: $("saveRound"),
   };
-  const CIRC = 2 * Math.PI * 52;
+  const CIRC = 2 * Math.PI * 55;
   els.prog.style.strokeDasharray = CIRC;
 
   // rounds are stored in seconds
@@ -532,61 +521,135 @@
   }
 
   // ---------- render ----------
+  // The strip: one segment per round, sized by its length. Before starting a
+  // segment opens the round editor; while timing it fills up as time passes.
   function renderList() {
-    els.rounds.innerHTML = "";
-    if (!rounds.length) {
-      const p = document.createElement("li");
-      p.className = "empty";
-      p.textContent = "ยังไม่มีรอบ แตะปุ่มนาทีด้านล่างเพื่อเพิ่ม";
-      els.rounds.appendChild(p);
-    }
+    els.strip.innerHTML = "";
+    const editable = canEdit();
     rounds.forEach((sec, i) => {
-      const li = document.createElement("li");
-      li.className = "row";
+      const seg = document.createElement("button");
+      seg.type = "button";
+      seg.className = "seg";
+      seg.style.setProperty("--w", sec);
+      const m = Math.floor(sec / 60), r = sec % 60;
+      seg.innerHTML = `<span class="bar"><i></i></span><span class="min">${r ? `${m}:${String(r).padStart(2, "0")}` : m}<span class="sr"> นาที</span></span>`;
+      seg.setAttribute("aria-label", `รอบ ${i + 1}: ${fmtRound(sec)}${editable ? " แตะเพื่อแก้" : ""}`);
       if (state !== "idle") {
-        if (i < idx || state === "finished") li.classList.add("done");
-        else if (i === idx) li.classList.add("current");
+        if (i < idx || state === "finished") seg.classList.add("done");
+        else if (i === idx) seg.classList.add("current");
       }
-      li.innerHTML = `<span class="n">รอบ ${i + 1}</span><span class="m">${fmtRound(sec)}</span>`;
-      const del = document.createElement("button");
-      del.type = "button";
-      del.setAttribute("aria-label", `ลบรอบ ${i + 1}`);
-      del.textContent = "ลบ";
-      del.disabled = !canEdit();
-      del.style.visibility = canEdit() ? "visible" : "hidden";
-      del.onclick = () => editRounds(() => rounds.splice(i, 1));
-      li.appendChild(del);
-      els.rounds.appendChild(li);
+      seg.disabled = !editable;
+      seg.onclick = () => openEditor(i);
+      els.strip.appendChild(seg);
     });
+    if (editable) {
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "seg add";
+      add.id = "addRound";
+      add.setAttribute("aria-label", "เพิ่มรอบ");
+      add.innerHTML = `<span class="bar"></span><span class="min">＋</span>`;
+      add.onclick = () => openEditor(null);
+      els.strip.appendChild(add);
+    }
+    if (!rounds.length) {
+      const hint = document.createElement("span");
+      hint.className = "empty-hint";
+      hint.textContent = "แตะ ＋ เพื่อเพิ่มรอบแรก";
+      els.strip.prepend(hint);
+    }
     const sum = rounds.reduce((a, b) => a + b, 0);
     els.total.textContent = rounds.length ? `${rounds.length} รอบ • รวม ${fmt(sum)}` : "ยังไม่มีรอบ";
-    renderStrip();
+    renderProgress();
   }
 
-  // Compact row of round lengths on the main screen.
-  function renderStrip() {
-    els.strip.innerHTML = "";
-    if (!rounds.length) {
-      const li = document.createElement("li");
-      li.className = "empty-strip";
-      li.textContent = "แตะ แก้ไขรอบ เพื่อเพิ่ม";
-      els.strip.appendChild(li);
-    }
-    rounds.forEach((sec, i) => {
-      const li = document.createElement("li");
-      const m = Math.floor(sec / 60), r = sec % 60;
-      li.textContent = r ? `${m}:${String(r).padStart(2, "0")}` : String(m);
-      li.title = `รอบ ${i + 1}: ${fmtRound(sec)}`;
-      if (state !== "idle") {
-        if (i < idx || state === "finished") li.classList.add("done");
-        else if (i === idx) li.classList.add("current");
+  // Fill each segment and update the line above the strip.
+  function renderProgress() {
+    const segs = els.strip.querySelectorAll(".seg:not(.add)");
+    const now = Date.now();
+    segs.forEach((seg, i) => {
+      let p = 0;
+      if (state === "finished" || (state !== "idle" && state !== "prep" && i < idx)) p = 100;
+      else if (i === idx && (state === "running" || state === "paused")) {
+        const rem = state === "running" ? Math.max(0, endAt - now) : remainingMs;
+        p = 100 * (1 - rem / (rounds[i] * 1000));
       }
-      els.strip.appendChild(li);
+      seg.style.setProperty("--p", `${p}%`);
     });
-    els.editRoundsBtn.disabled = !canEdit();
-    const cur = els.strip.querySelector(".current");
-    if (cur) els.strip.scrollLeft = cur.offsetLeft - (els.strip.clientWidth - cur.offsetWidth) / 2;
+    const rest = rounds.slice(idx + 1).reduce((a, b) => a + b, 0) * 1000;
+    if (state === "running") els.finishAt.textContent = `เสร็จราว ${clock(endAt + rest)}`;
+    else if (state === "prep") els.finishAt.textContent = `เสร็จราว ${clock(endAt + rounds.reduce((a, b) => a + b, 0) * 1000)}`;
+    else if (state === "finished") els.finishAt.textContent = "ครบแล้ว";
+    else if (state === "paused") els.finishAt.textContent = "หยุดชั่วคราว";
+    else els.finishAt.textContent = rounds.length ? "แตะรอบเพื่อแก้" : "";
   }
+
+  // ---------- round editor ----------
+  // Edits one round (index) or adds new ones (index null). Nothing changes
+  // until Save, so Cancel always leaves the rounds as they were.
+  const QUICK = [15, 20, 30, 40, 45, 60];
+  let editing = null;
+  let draft = 0;
+  function openEditor(i) {
+    if (!canEdit()) return;
+    editing = i;
+    draft = i === null ? (rounds[rounds.length - 1] || 30 * 60) : rounds[i];
+    els.roundTitle.textContent = i === null ? "เพิ่มรอบ" : `รอบที่ ${i + 1}`;
+    els.saveRound.textContent = i === null ? "เพิ่มรอบ" : "บันทึก";
+    els.deleteRound.hidden = i === null;
+    els.clearBtn.hidden = !rounds.length;
+    els.roundInput.value = "";
+    els.roundError.hidden = true;
+    renderDraft();
+    els.roundSheet.showModal();
+  }
+  function renderDraft() {
+    els.draft.value = fmtRound(draft);
+    els.stepDown.disabled = draft <= 5 * 60;
+    els.quick.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.min * 60 === draft)));
+  }
+  function stepDraft(dir) {
+    const five = 5 * 60;
+    draft = dir > 0 ? Math.floor(draft / five) * five + five : Math.max(five, Math.ceil(draft / five) * five - five);
+    renderDraft();
+  }
+  QUICK.forEach((m) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.min = m; b.textContent = m;
+    b.setAttribute("aria-label", `${m} นาที`);
+    b.onclick = () => { draft = m * 60; els.roundInput.value = ""; renderDraft(); };
+    els.quick.appendChild(b);
+  });
+  els.stepDown.onclick = () => stepDraft(-1);
+  els.stepUp.onclick = () => stepDraft(1);
+  els.roundCancel.onclick = () => els.roundSheet.close();
+  els.roundSheet.addEventListener("click", (e) => { if (e.target === els.roundSheet) els.roundSheet.close(); });
+  els.roundForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    // Typed text wins over the stepper; it may hold several rounds ("30, 30").
+    let vals = [draft];
+    const parts = els.roundInput.value.split(/[,\s]+/).filter(Boolean);
+    if (parts.length) {
+      vals = parts.map(parseEntry);
+      if (vals.some((v) => !Number.isFinite(v))) {
+        els.roundError.textContent = "ใส่เป็นตัวเลขนาที เช่น 30 หรือ 30, 30 หรือ 1:30 (นาที:วินาที)";
+        els.roundError.hidden = false;
+        return;
+      }
+    }
+    const at = editing;
+    editRounds(() => (at === null ? rounds.push(...vals) : rounds.splice(at, 1, ...vals)));
+    els.roundSheet.close();
+  });
+  els.deleteRound.onclick = () => {
+    const at = editing;
+    editRounds(() => rounds.splice(at, 1));
+    els.roundSheet.close();
+  };
+  els.clearBtn.onclick = () => {
+    editRounds(() => { rounds = []; });
+    els.roundSheet.close();
+  };
 
   function currentRemainingMs() {
     if (active()) return Math.max(0, endAt - Date.now());
@@ -603,6 +666,7 @@
     els.prog.style.strokeDashoffset = state === "finished" ? 0 : CIRC * (1 - frac);
     els.dial.classList.toggle("finished", state === "finished");
     els.dimTime.textContent = els.time.textContent;
+    renderProgress();
     els.dimLabel.textContent = state === "prep" ? "เตรียมตัว" : `รอบ ${idx + 1} จาก ${rounds.length}`;
 
     if (state === "idle") els.roundLabel.textContent = rounds.length ? `พร้อมเริ่ม • ${rounds.length} รอบ` : "ยังไม่ได้ตั้งรอบ";
@@ -611,11 +675,7 @@
     else els.roundLabel.textContent = `รอบ ${idx + 1} จาก ${rounds.length}${state === "paused" ? " • หยุดชั่วคราว" : ""}`;
 
     if (state === "running") {
-      const restSec = rounds.slice(idx + 1).reduce((a, b) => a + b, 0);
-      const allEnd = endAt + restSec * 1000;
-      els.endAt.textContent = idx < rounds.length - 1
-        ? `รอบนี้ครบ ${clock(endAt)} • ทั้งหมด ${clock(allEnd)}`
-        : `ครบเวลา ${clock(endAt)}`;
+      els.endAt.textContent = idx < rounds.length - 1 ? `ครบรอบนี้ ${clock(endAt)}` : `ครบเวลา ${clock(endAt)}`;
     } else if (state === "prep") {
       els.endAt.textContent = `เริ่มรอบ 1 เมื่อนับถึง 0`;
     } else if (state === "finished") {
@@ -629,7 +689,8 @@
     document.body.classList.toggle("running", active() || state === "paused");
     els.startBtn.disabled = !rounds.length;
     els.startBtn.dataset.action = state === "running" ? "pause" : state === "paused" ? "resume" : "start";
-    els.startBtn.textContent = state === "running" ? "หยุดชั่วคราว" : state === "paused" ? "ทำต่อ"
+    if (state === "prep") els.startBtn.dataset.action = "skip";
+    els.startLabel.textContent = state === "running" ? "หยุดชั่วคราว" : state === "paused" ? "ทำต่อ"
       : state === "prep" ? "ข้าม เริ่มรอบแรกเลย" : state === "finished" ? "เริ่มใหม่" : "เริ่ม";
     els.resetBtn.disabled = state === "idle";
   }
@@ -644,7 +705,7 @@
   let dimTimer = null;
   function renderDim() {
     const show = settings.dim && active() && Date.now() >= revealedUntil;
-    if (show) [els.roundsSheet, els.settingsSheet].forEach((d) => d.open && d.close());
+    if (show) [els.roundSheet, els.settingsSheet].forEach((d) => d.open && d.close());
     els.dim.hidden = !show;
     document.body.classList.toggle("dimmed", show);
   }
@@ -739,12 +800,9 @@
     else start();
   };
   els.dim.onclick = reveal;
-  els.editRoundsBtn.onclick = () => { if (canEdit()) els.roundsSheet.showModal(); };
   els.settingsBtn.onclick = () => els.settingsSheet.showModal();
-  [els.roundsSheet, els.settingsSheet].forEach((sheet) => {
-    sheet.querySelector("[data-close]").onclick = () => sheet.close();
-    sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); }); // tap outside
-  });
+  els.settingsSheet.querySelector("[data-close]").onclick = () => els.settingsSheet.close();
+  els.settingsSheet.addEventListener("click", (e) => { if (e.target === els.settingsSheet) els.settingsSheet.close(); }); // tap outside
   // Any tap while the controls are showing keeps them up a little longer.
   document.addEventListener("pointerdown", (e) => {
     if (active() && !els.dim.contains(e.target) && Date.now() < revealedUntil) reveal();
@@ -758,7 +816,7 @@
     container.innerHTML = "";
     options.forEach(([value, label, wide]) => {
       const b = document.createElement("button");
-      b.type = "button"; b.className = wide ? "sound wide" : "sound"; b.id = `${idPrefix}-${value}`;
+      b.type = "button"; b.className = wide ? "choice wide" : "choice"; b.id = `${idPrefix}-${value}`;
       b.setAttribute("role", "radio");
       b.setAttribute("aria-checked", String(value === current()));
       b.textContent = label;
@@ -788,31 +846,6 @@
   }, "prep");
   els.dimToggle.checked = settings.dim;
   els.dimToggle.onchange = () => { settings.dim = els.dimToggle.checked; saveSettings(); renderDim(); };
-  els.clearBtn.onclick = () => editRounds(() => { rounds = []; });
-
-  [15, 20, 30, 40, 45, 60].forEach((m) => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "chip"; b.textContent = `+${m}`;
-    b.setAttribute("aria-label", `เพิ่มรอบ ${m} นาที`);
-    b.onclick = () => editRounds(() => rounds.push(m * 60));
-    els.chips.appendChild(b);
-  });
-
-  els.addForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const parts = els.addInput.value.split(/[,\s]+/).filter(Boolean);
-    const vals = parts.map(parseEntry);
-    if (!parts.length) return;
-    if (vals.some((v) => !Number.isFinite(v))) {
-      els.addError.textContent = "ใส่เป็นตัวเลขนาที เช่น 30 หรือ 30, 30 หรือ 1:30 (นาที:วินาที)";
-      els.addError.hidden = false;
-      return;
-    }
-    els.addError.hidden = true;
-    editRounds(() => rounds.push(...vals));
-    els.addInput.value = "";
-  });
-
   renderAll();
 })();
 </script>

@@ -31,14 +31,27 @@ async function open(page, { rounds, sound, settings = { prep: 0, dim: false } } 
   return errors;
 }
 
-// Rounds and settings live in sheets that open from the main screen.
-// These run [act] with the sheet open, then close it again (the rounds sheet
-// stays open when it is showing an input error, so tests can read it).
-async function inRounds(page, act) {
-  const sheet = page.locator("#roundsSheet");
-  if (!(await sheet.evaluate((d) => d.open))) await page.locator("#editRoundsBtn").click();
-  await act();
-  if (await page.locator("#addError").isHidden()) await sheet.locator("[data-close]").click();
+// Rounds are edited by tapping a segment of the strip (or ＋ to add), which
+// opens the round editor sheet; settings live in their own sheet.
+const editor = (page) => page.locator("#roundSheet");
+async function addRound(page, minutes) {
+  await page.locator("#addRound").click();
+  await editor(page).getByRole("button", { name: `${minutes} นาที`, exact: true }).click();
+  await page.locator("#saveRound").click();
+}
+// Leaves the editor open when it shows an input error, so tests can read it.
+async function typeRounds(page, text) {
+  await page.locator("#addRound").click();
+  await page.locator("#roundInput").fill(text);
+  await page.locator("#saveRound").click();
+}
+async function deleteRound(page, n) {
+  await page.locator("#strip .seg").nth(n - 1).click();
+  await page.locator("#deleteRound").click();
+}
+async function clearRounds(page) {
+  await page.locator("#addRound").click();
+  await page.locator("#clearBtn").click();
 }
 async function inSettings(page, act) {
   const sheet = page.locator("#settingsSheet");
@@ -62,11 +75,10 @@ const ui = (page) => ({
   time: page.locator("#time"),
   label: page.locator("#roundLabel"),
   endAt: page.locator("#endAt"),
-  rows: page.locator("#rounds .row"),
-  input: page.locator("#addInput"),
-  add: page.locator("#addForm button[type=submit]"),
-  error: page.locator("#addError"),
-  clear: page.locator("#clearBtn"),
+  rows: page.locator("#strip .seg:not(.add)"),
+  input: page.locator("#roundInput"),
+  error: page.locator("#roundError"),
+  finishAt: page.locator("#finishAt"),
   total: page.locator("#total"),
 });
 
@@ -87,8 +99,8 @@ test.describe("setup", () => {
     await open(page, { rounds: [] });
     const u = ui(page);
     await expect(u.start).toBeDisabled();
-    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 15 นาที" }).click());
-    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 45 นาที" }).click());
+    await addRound(page, 15);
+    await addRound(page, 45);
     await expect(u.rows).toHaveCount(2);
     await expect(u.rows.nth(1)).toContainText("45 นาที");
     await expect(u.time).toHaveText("15:00");
@@ -98,18 +110,17 @@ test.describe("setup", () => {
   test("typed list accepts minutes, decimals and min:sec", async ({ page }) => {
     await open(page, { rounds: [] });
     const u = ui(page);
-    await inRounds(page, async () => { await u.input.fill("30, 30 1.5 2:05"); await u.add.click(); });
+    await typeRounds(page, "30, 30 1.5 2:05");
     await expect(u.rows).toHaveCount(4);
     await expect(u.rows.nth(2)).toContainText("1:30 นาที");
     await expect(u.rows.nth(3)).toContainText("2:05 นาที");
-    await expect(u.input).toHaveValue("");
   });
 
   for (const bad of ["abc", "0", "5:75", "30,,x"]) {
     test(`rejects invalid input "${bad}"`, async ({ page }) => {
       await open(page, { rounds: [] });
       const u = ui(page);
-      await inRounds(page, async () => { await u.input.fill(bad); await u.add.click(); });
+      await typeRounds(page, bad);
       await expect(u.error).toBeVisible();
       await expect(u.rows).toHaveCount(0);
     });
@@ -118,17 +129,17 @@ test.describe("setup", () => {
   test("deletes one round and clears all", async ({ page }) => {
     await open(page, { rounds: [600, 1200, 1800] });
     const u = ui(page);
-    await inRounds(page, () => page.getByRole("button", { name: "ลบรอบ 2" }).click());
+    await deleteRound(page, 2);
     await expect(u.rows).toHaveCount(2);
     await expect(u.rows.nth(1)).toContainText("30 นาที");
-    await inRounds(page, () => u.clear.click());
+    await clearRounds(page);
     await expect(u.rows).toHaveCount(0);
     await expect(u.start).toBeDisabled();
   });
 
   test("remembers rounds and sound after reload", async ({ page }) => {
     await open(page, { rounds: [] });
-    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 20 นาที" }).click());
+    await addRound(page, 20);
     await inSettings(page, () => page.locator("#sounds").getByRole("radio", { name: "บี๊บดิจิทัล", includeHidden: true }).click());
     await page.reload();
     await expect(ui(page).rows).toHaveCount(1);
@@ -143,7 +154,7 @@ test.describe("running", () => {
     await u.start.click();
     await expect(u.label).toHaveText("รอบ 1 จาก 2");
     await expect(u.endAt).toContainText("09:30");
-    await expect(u.endAt).toContainText("10:00");
+    await expect(u.finishAt).toContainText("10:00");
 
     await advance(page, 29 * MIN);
     await expect(u.time).toHaveText("01:00");
@@ -197,8 +208,8 @@ test.describe("running", () => {
   test("round list is locked while running", async ({ page }) => {
     await open(page, { rounds: [1800] });
     await ui(page).start.click();
-    await expect(page.getByRole("button", { name: "ลบรอบ 1" })).toBeHidden();
-    await expect(page.locator(".setup-only")).toHaveCSS("pointer-events", "none");
+    await expect(ui(page).rows.nth(0)).toBeDisabled();
+    await expect(page.locator("#addRound")).toHaveCount(0);
   });
 
   test("restart after finishing runs all rounds again", async ({ page }) => {
@@ -220,15 +231,15 @@ test.describe("running", () => {
     await u.start.click();
     await advance(page, 2 * MIN + 500);
     await expect(u.label).toHaveText("ครบทุกรอบแล้ว");
-    await inRounds(page, () => page.getByRole("button", { name: "ลบรอบ 2" }).click());
+    await deleteRound(page, 2);
     await expect(u.rows).toHaveCount(1);
     await expect(u.label).toHaveText("พร้อมเริ่ม • 1 รอบ");
     await expect(u.time).toHaveText("01:00");
-    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click());
+    await addRound(page, 40);
     await expect(u.rows).toHaveCount(2);
     await expect(u.start).toHaveText("เริ่ม");
     // rounds that have not run yet must not be struck through
-    await expect(page.locator("#rounds .row.done")).toHaveCount(0);
+    await expect(page.locator("#strip .seg.done")).toHaveCount(0);
   });
 
   test("adding a round after finishing shows it as not yet run", async ({ page }) => {
@@ -239,14 +250,15 @@ test.describe("running", () => {
     await expect(u.label).toHaveText("ครบทุกรอบแล้ว");
     await expect(u.rows.nth(0)).toHaveClass(/done/);
 
-    await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 30 นาที" }).click());
+    await addRound(page, 30);
     await expect(u.rows).toHaveCount(2);
-    await expect(page.locator("#rounds .row.done")).toHaveCount(0);
-    await expect(u.rows.nth(1).locator(".m")).toHaveCSS("text-decoration-line", "none");
+    await expect(page.locator("#strip .seg.done")).toHaveCount(0);
+    await expect(u.rows.nth(0)).not.toHaveClass(/done/);
+    await expect(u.rows.nth(1)).not.toHaveClass(/done/);
     await expect(u.label).toHaveText("พร้อมเริ่ม • 2 รอบ");
 
-    await inRounds(page, async () => { await u.input.fill("15, 15"); await u.add.click(); });
-    await expect(page.locator("#rounds .row.done")).toHaveCount(0);
+    await typeRounds(page, "15, 15");
+    await expect(page.locator("#strip .seg.done")).toHaveCount(0);
   });
 
   test("phone asleep past several round ends: catches up, rings once", async ({ page }) => {
@@ -294,7 +306,7 @@ test("main screen fits one phone screen without scrolling", async ({ page }) => 
   }));
   expect(size.sideways).toBeLessThanOrEqual(0);
   expect(size.down).toBeLessThanOrEqual(0);
-  for (const id of ["#settingsBtn", "#dial", "#editRoundsBtn", "#startBtn", "#resetBtn"]) {
+  for (const id of ["#settingsBtn", "#dial", "#strip", "#addRound", "#startBtn"]) {
     await expect(page.locator(id)).toBeInViewport({ ratio: 1 });
   }
 });
@@ -303,57 +315,101 @@ test("fits a small 360 x 640 phone too", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await open(page, { rounds: [2400, 2400, 2400, 2400] });
   expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  await ui(page).start.click();
   await expect(page.locator("#resetBtn")).toBeInViewport({ ratio: 1 });
 });
 
-test("the strip on the main screen shows each round and its progress", async ({ page }) => {
+test("the strip shows each round sized by its length and fills while timing", async ({ page }) => {
   await open(page, { rounds: [60, 90, 1800] });
-  const pills = page.locator("#strip li");
-  await expect(pills).toHaveText(["1", "1:30", "30"]);
+  const segs = ui(page).rows;
+  await expect(segs.locator(".min")).toHaveText(["1 นาที", "1:30 นาที", "30 นาที"]);
+  const [a, c] = [await segs.nth(0).boundingBox(), await segs.nth(2).boundingBox()];
+  expect(c.width).toBeGreaterThan(a.width * 3);
+  await expect(ui(page).finishAt).toHaveText("แตะรอบเพื่อแก้");
   await ui(page).start.click();
-  await advance(page, 1 * MIN + 500);
-  await expect(pills.nth(0)).toHaveClass(/done/);
-  await expect(pills.nth(1)).toHaveClass(/current/);
-  await expect(page.locator("#editRoundsBtn")).toBeDisabled();
+  await advance(page, 1 * MIN + 45_000);
+  await expect(segs.nth(0)).toHaveClass(/done/);
+  await expect(segs.nth(1)).toHaveClass(/current/);
+  const fill = await segs.nth(1).evaluate((e) => e.style.getPropertyValue("--p"));
+  expect(parseFloat(fill)).toBeGreaterThan(40);
+  expect(parseFloat(fill)).toBeLessThan(60);
+  await expect(ui(page).finishAt).toContainText("เสร็จราว");
 });
 
-test("start fills the row, reset is small, each round has a delete button", async ({ page }) => {
+test("tapping a round opens its editor: steps, quick picks, typing, delete", async ({ page }) => {
   await open(page, { rounds: [1800, 1800, 600] });
   const u = ui(page);
-  const start = await u.start.boundingBox();
-  const reset = await u.reset.boundingBox();
-  const app = await page.locator(".app").boundingBox();
-  expect(Math.abs(start.width - app.width)).toBeLessThanOrEqual(1);
-  expect(reset.height).toBeLessThan(start.height / 1.5);
-  expect(reset.width).toBeLessThan(start.width / 2);
+  await u.rows.nth(1).click();
+  await expect(editor(page)).toBeVisible();
+  await expect(page.locator("#roundTitle")).toHaveText("รอบที่ 2");
+  await expect(page.locator("#draft")).toHaveText("30 นาที");
+  await page.locator("#stepUp").click();
+  await expect(page.locator("#draft")).toHaveText("35 นาที");
+  await page.locator("#stepDown").click();
+  await page.locator("#stepDown").click();
+  await expect(page.locator("#draft")).toHaveText("25 นาที");
+  await page.locator("#saveRound").click();
+  await expect(editor(page)).toBeHidden();
+  await expect(u.rows.nth(1).locator(".min")).toHaveText("25 นาที");
 
-  await page.locator("#editRoundsBtn").click();
-  for (let i = 1; i <= 3; i++) {
-    await expect(page.getByRole("button", { name: `ลบรอบ ${i}` })).toBeVisible();
-    await expect(page.getByRole("button", { name: `ลบรอบ ${i}` })).toHaveText("ลบ");
-  }
-  await page.getByRole("button", { name: "ลบรอบ 3" }).click();
-  await expect(u.rows).toHaveCount(2);
-  await expect(u.total).toHaveText("2 รอบ • รวม 1:00:00");
+  // Cancel leaves the round as it was.
+  await u.rows.nth(0).click();
+  await editor(page).getByRole("button", { name: "60 นาที", exact: true }).click();
+  await page.locator("#roundCancel").click();
+  await expect(u.rows.nth(0).locator(".min")).toHaveText("30 นาที");
+
+  // Typing several values replaces this round and adds the rest after it.
+  await u.rows.nth(2).click();
+  await page.locator("#roundInput").fill("1:30, 20");
+  await page.locator("#saveRound").click();
+  await expect(u.rows.locator(".min")).toHaveText(["30 นาที", "25 นาที", "1:30 นาที", "20 นาที"]);
+
+  await deleteRound(page, 1);
+  await expect(u.rows).toHaveCount(3);
+  await expect(u.total).toHaveText("3 รอบ • รวม 46:30");
 });
 
-test("sheets close with Done or a tap outside", async ({ page }) => {
+test("＋ adds a round as long as the last one unless changed", async ({ page }) => {
+  await open(page, { rounds: [2400] });
+  await page.locator("#addRound").click();
+  await expect(page.locator("#roundTitle")).toHaveText("เพิ่มรอบ");
+  await expect(page.locator("#draft")).toHaveText("40 นาที");
+  await expect(page.locator("#deleteRound")).toBeHidden();
+  await page.locator("#saveRound").click();
+  await expect(ui(page).rows.locator(".min")).toHaveText(["40 นาที", "40 นาที"]);
+});
+
+test("the main button is one round button with a label underneath", async ({ page }) => {
+  await open(page, { rounds: [1800] });
+  const u = ui(page);
+  const go = await page.locator("#startBtn .go").boundingBox();
+  expect(Math.abs(go.width - go.height)).toBeLessThanOrEqual(1);
+  await expect(u.start).toHaveText("เริ่ม");
+  await expect(u.reset).toBeHidden(); // nothing to reset yet
+  await u.start.click();
+  await expect(u.reset).toBeVisible();
+});
+
+test("sheets close with Done, Cancel or a tap outside", async ({ page }) => {
   await open(page);
   const sheet = page.locator("#settingsSheet");
   await page.locator("#settingsBtn").click();
   await expect(sheet).toBeVisible();
   await sheet.locator("[data-close]").click();
   await expect(sheet).toBeHidden();
-  await page.locator("#editRoundsBtn").click();
-  await expect(page.locator("#roundsSheet")).toBeVisible();
+  await page.locator("#settingsBtn").click();
   await page.mouse.click(10, 10); // backdrop above the sheet
-  await expect(page.locator("#roundsSheet")).toBeHidden();
+  await expect(sheet).toBeHidden();
+  await page.locator("#addRound").click();
+  await expect(editor(page)).toBeVisible();
+  await page.mouse.click(10, 10);
+  await expect(editor(page)).toBeHidden();
 });
 
 test("pause and resume buttons use different colours from start and each other", async ({ page }) => {
   await open(page, { rounds: [600] });
   const u = ui(page);
-  const bg = () => u.start.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const bg = () => page.locator("#startBtn .go").evaluate((el) => getComputedStyle(el).backgroundColor);
   const startColour = await bg();
   await u.start.click();
   await expect(u.start).toHaveText("หยุดชั่วคราว");
@@ -460,10 +516,10 @@ test.describe("screen stays on", () => {
   });
 });
 
-test("quick-add buttons are 15, 20, 30, 40, 45, 60 minutes", async ({ page }) => {
+test("quick picks are 15, 20, 30, 40, 45, 60 minutes", async ({ page }) => {
   await open(page, { rounds: [] });
-  await expect(page.locator("#chips .chip")).toHaveText(["+15", "+20", "+30", "+40", "+45", "+60"]);
-  await inRounds(page, () => page.getByRole("button", { name: "เพิ่มรอบ 40 นาที" }).click());
+  await expect(page.locator("#quick button")).toHaveText(["15", "20", "30", "40", "45", "60"]);
+  await addRound(page, 40);
   await expect(ui(page).rows.nth(0)).toContainText("40 นาที");
 });
 

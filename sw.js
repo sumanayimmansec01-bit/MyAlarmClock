@@ -1,5 +1,5 @@
 // Offline cache so the timer opens without a connection once installed.
-const CACHE = "multi-round-timer-v1";
+const CACHE = "multi-round-timer-v2";
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
