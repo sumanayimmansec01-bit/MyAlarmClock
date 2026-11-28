@@ -191,6 +191,19 @@
   .dim-hint { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); font-size: .8rem; color: #2c3331; }
   .dim-hint.warn { color: #8a5a1c; }
 
+  /* Sitting history */
+  .log-session { border: 1px solid var(--hair); border-radius: 14px; background: var(--bg); }
+  .log-session summary { cursor: pointer; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; list-style: none; }
+  .log-session summary::-webkit-details-marker { display: none; }
+  .log-session summary b { font-weight: 500; }
+  .log-session summary span { font-size: .82rem; color: var(--soft); }
+  .log-rows { margin: 0; padding: 4px 14px 12px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .log-rows li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; font-size: .86rem; }
+  .log-rows time { color: var(--soft); font-variant-numeric: tabular-nums; }
+  .log-rows small { display: block; color: var(--soft); font-size: .78rem; }
+  .log-rows li.warn, .log-rows li.warn small { color: var(--pause); }
+  .log-empty { color: var(--soft); font-size: .9rem; margin: 0; }
+
   @media (prefers-reduced-motion: reduce) { .dial .prog { transition: none; } }
 </style>
 </head>
@@ -276,7 +289,26 @@
       <input type="checkbox" id="dimToggle" role="switch">
     </label>
 
+    <h3 class="group">ประวัติ</h3>
+    <button class="soft-btn" id="openLog" type="button">📋 ดูประวัติการนั่ง</button>
+
     <p class="note">ระหว่างจับเวลา เปิดหน้านี้ค้างไว้และเปิดเสียงสื่อของมือถือไว้ แอพจะกันจอดับให้</p>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="logSheet" aria-labelledby="logTitle">
+  <div class="sheet-head">
+    <h2 id="logTitle">ประวัติการนั่ง</h2>
+    <button class="text-btn" type="button" id="closeLog">เสร็จ</button>
+  </div>
+  <div class="sheet-body">
+    <p class="note">เก็บไว้ในมือถือเครื่องนี้เท่านั้น ไม่ได้ส่งไปที่ไหน (ล่าสุด 400 รายการ)</p>
+    <div id="logList"></div>
+    <div class="sheet-actions">
+      <button class="danger-link" type="button" id="clearLog">ล้างประวัติ</button>
+      <button class="pill-btn" type="button" id="copyLog">คัดลอก</button>
+    </div>
+    <p class="note" id="copyNote" hidden></p>
   </div>
 </dialog>
 
@@ -302,6 +334,8 @@
     draft: $("draft"), stepDown: $("stepDown"), stepUp: $("stepUp"), quick: $("quick"),
     roundInput: $("roundInput"), roundError: $("roundError"), deleteRound: $("deleteRound"),
     clearBtn: $("clearBtn"), saveRound: $("saveRound"),
+    openLog: $("openLog"), logSheet: $("logSheet"), logList: $("logList"), closeLog: $("closeLog"),
+    clearLog: $("clearLog"), copyLog: $("copyLog"), copyNote: $("copyNote"),
   };
   const CIRC = 2 * Math.PI * 55;
   els.prog.style.strokeDasharray = CIRC;
@@ -313,6 +347,23 @@
     if (Array.isArray(saved) && saved.every((n) => Number.isFinite(n) && n > 0)) rounds = saved;
   } catch (_) {}
   const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(rounds)); } catch (_) {} };
+
+  // ---------- history ----------
+  // A small on-device log (last 400 events) so a missed alert can be explained afterwards.
+  const LOG_KEY = STORE_KEY + ":log";
+  const LOG_MAX = 400;
+  let logs = [];
+  try { const l = JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); if (Array.isArray(l)) logs = l; } catch (_) {}
+  function log(e, data = {}) {
+    logs.push({ t: Date.now(), e, ...data });
+    if (logs.length > LOG_MAX) logs = logs.slice(-LOG_MAX);
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(logs)); } catch (_) {}
+  }
+  // If the last session never ended (page closed or reloaded while timing), say so.
+  (() => {
+    const last = logs[logs.length - 1];
+    if (last && !["finish", "reset", "lost"].includes(last.e)) log("lost", { after: last.e, at: last.t });
+  })();
 
   // state: idle | prep (settling-in countdown) | running | paused | finished
   let state = "idle";
@@ -434,16 +485,18 @@
   let wakeLock = null;
   let wakeState = "off";
   async function lockScreen() {
-    if (!("wakeLock" in navigator)) { wakeState = "unsupported"; renderWake(); return; }
+    if (!("wakeLock" in navigator)) { wakeState = "unsupported"; log("wake", { s: "unsupported" }); renderWake(); return; }
     if (wakeLock) return;
     try {
       const lock = await navigator.wakeLock.request("screen");
       if (!active()) { lock.release(); return; }
       wakeLock = lock;
       wakeState = "on";
+      log("wake", { s: "on" });
       lock.addEventListener("release", () => {
         if (wakeLock !== lock) return; // released on purpose
         wakeLock = null;
+        log("wake", { s: "dropped" });
         // The phone dropped the lock (e.g. battery saver); ask again while the page is in front.
         if (active() && document.visibilityState === "visible") lockScreen();
         else { wakeState = active() ? "denied" : "off"; renderWake(); }
@@ -451,6 +504,7 @@
     } catch (_) {
       wakeLock = null;
       wakeState = "denied";
+      log("wake", { s: "denied" });
     }
     renderWake();
   }
@@ -476,10 +530,15 @@
     els.dimHint.classList.toggle("warn", wakeState === "denied" || wakeState === "unsupported");
   }
   document.addEventListener("visibilitychange", () => {
+    if (active() || state === "paused") log("vis", { v: document.visibilityState });
     if (document.visibilityState === "visible") {
       if (active()) { lockScreen(); tick(); }
     }
   });
+
+  // The phone may freeze a hidden page outright (Chrome's page lifecycle).
+  document.addEventListener("freeze", () => { if (active()) log("freeze"); });
+  document.addEventListener("resume", () => { if (active()) log("thaw"); });
 
   // ---------- format ----------
   function fmt(sec) {
@@ -732,11 +791,15 @@
         nextEnd += rounds[next] * 1000;
         next++;
       }
+      const audioState = ctx ? ctx.state : "none";
+      const alert = { i: idx, due: endAt, audio: audioState, skipped: next - (idx + 1) };
       if (next >= rounds.length) {
+        log("alert", { ...alert, last: true });
         chime(finalKey());
         finish();
         return;
       }
+      log("alert", alert);
       chime();
       idx = next;
       endAt = nextEnd + rounds[idx] * 1000;
@@ -751,7 +814,9 @@
   function start() {
     audio(); // unlock audio inside the tap
     revealedUntil = 0;
+    if (state !== "paused") log("start", { r: rounds.slice(), prep: settings.prep });
     if (state === "paused") {
+      log("resume");
       endAt = Date.now() + remainingMs;
       state = "running";
     } else if (settings.prep > 0) {
@@ -768,6 +833,7 @@
   }
   // Round 1 starts at [at]: the end of the countdown, or now.
   function beginRounds(at) {
+    log("round", { i: 0 });
     idx = 0;
     endAt = at + rounds[0] * 1000;
     state = "running";
@@ -777,12 +843,14 @@
   }
   function pause() {
     remainingMs = Math.max(0, endAt - Date.now());
+    log("pause", { left: remainingMs });
     state = "paused";
     stopLoop();
     unlockScreen();
     renderAll();
   }
   function finish() {
+    log("finish");
     state = "finished";
     revealedUntil = 0;
     stopLoop();
@@ -790,7 +858,123 @@
     renderAll();
   }
   function reset() {
+    if (state !== "idle") log("reset", { was: state });
     state = "idle"; idx = 0; revealedUntil = 0; stopLoop(); unlockScreen(); renderAll();
+  }
+
+  // ---------- history view ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  const hms = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  const dmy = (t) => { const d = new Date(t); return `${d.getDate()}/${d.getMonth() + 1}`; };
+  function span(ms) {
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s} วินาที`;
+    const m = Math.floor(s / 60);
+    return m < 60 ? `${m} นาที ${s % 60} วินาที` : `${Math.floor(m / 60)} ชม. ${m % 60} นาที`;
+  }
+  const AFTER = { start: "กดเริ่ม", round: "เริ่มรอบ", alert: "แจ้งเตือน", pause: "หยุดชั่วคราว", resume: "ทำต่อ", vis: "สลับหน้า", wake: "กันจอดับ", freeze: "หน้าถูกพัก", thaw: "หน้ากลับมา" };
+
+  // Turns the log into sessions of readable rows; each row is { t, text, note, warn }.
+  function buildHistory() {
+    const sessions = [];
+    let cur = null, hiddenAt = null;
+    for (const ev of logs) {
+      if (ev.e === "start") {
+        cur = { t: ev.t, rows: [], end: null, alerts: 0, late: 0 };
+        sessions.push(cur);
+        hiddenAt = null;
+        const mins = (ev.r || []).map((x) => (x % 60 ? `${Math.floor(x / 60)}:${pad(x % 60)}` : Math.floor(x / 60))).join(", ");
+        cur.rows.push({ t: ev.t, text: `กดเริ่ม • ${(ev.r || []).length} รอบ`, note: `${mins} นาที${ev.prep ? ` • นับถอยหลัง ${ev.prep} วินาที` : ""}` });
+        continue;
+      }
+      if (!cur) continue;
+      const row = { t: ev.t };
+      if (ev.e === "round") { row.text = `เริ่มรอบ ${ev.i + 1}`; }
+      else if (ev.e === "alert") {
+        const delay = ev.t - ev.due;
+        const late = delay > 3000;
+        cur.alerts++; if (late) cur.late++;
+        row.text = `🔔 เตือนจบรอบ ${ev.i + 1}${ev.last ? " (รอบสุดท้าย)" : ""}`;
+        row.note = `ควรเตือน ${hms(ev.due)} • ${late ? `ช้า ${span(delay)}` : "ตรงเวลา"}`;
+        if (ev.skipped > 0) row.note += ` • ข้าม ${ev.skipped} รอบที่เลยเวลาไปแล้ว`;
+        if (ev.audio === "suspended" || ev.audio === "interrupted") { row.note += " • ⚠️ ระบบเสียงถูกพัก อาจไม่ได้ยินเสียง"; row.warn = true; }
+        else if (ev.audio === "none") { row.note += " • ⚠️ ไม่มีระบบเสียง"; row.warn = true; }
+        if (late) row.warn = true;
+      }
+      else if (ev.e === "pause") { row.text = "หยุดชั่วคราว"; row.note = `เหลือ ${span(ev.left)}`; }
+      else if (ev.e === "resume") { row.text = "ทำต่อ"; }
+      else if (ev.e === "reset") { row.text = "กดเลิก แล้วเริ่มใหม่"; cur.end = "reset"; }
+      else if (ev.e === "finish") { row.text = "✅ จบครบทุกรอบ"; cur.end = "finish"; }
+      else if (ev.e === "vis") {
+        if (ev.v === "hidden") { hiddenAt = ev.t; row.text = "📵 หน้านี้ถูกซ่อน"; row.note = "จอดับ หรือสลับไปแอพอื่น"; row.warn = true; }
+        else { row.text = "กลับมาที่หน้านี้"; if (hiddenAt) { row.note = `หายไป ${span(ev.t - hiddenAt)}`; hiddenAt = null; } }
+      }
+      else if (ev.e === "wake") {
+        row.text = { on: "🔆 กันจอดับ: สำเร็จ", denied: "⚠️ กันจอดับ: มือถือไม่อนุญาต", unsupported: "⚠️ กันจอดับ: เบราว์เซอร์ไม่รองรับ", dropped: "มือถือปล่อยการกันจอดับ" }[ev.s] || "กันจอดับ";
+        if (ev.s === "denied" || ev.s === "unsupported") row.warn = true;
+      }
+      else if (ev.e === "freeze") { row.text = "มือถือพักหน้านี้ (freeze)"; row.warn = true; }
+      else if (ev.e === "thaw") { row.text = "หน้ากลับมาทำงาน"; }
+      else if (ev.e === "lost") {
+        row.text = "⚠️ แอพถูกปิดหรือรีโหลดก่อนจบ";
+        row.note = `เหตุการณ์สุดท้ายที่บันทึกไว้: ${AFTER[ev.after] || ev.after} เมื่อ ${hms(ev.at)}`;
+        row.warn = true;
+        cur.end = "lost";
+      }
+      else continue;
+      cur.rows.push(row);
+    }
+    return sessions.reverse();
+  }
+
+  function sessionStatus(se, isLatest) {
+    if (se.end === "finish") return "จบครบทุกรอบ";
+    if (se.end === "reset") return "กดเลิก";
+    if (se.end === "lost") return "⚠️ ถูกขัดจังหวะ (แอพปิดหรือรีโหลด)";
+    return isLatest && (active() || state === "paused") ? "กำลังจับเวลา" : "ไม่ทราบสถานะ";
+  }
+
+  function renderHistory() {
+    els.logList.innerHTML = "";
+    const sessions = buildHistory();
+    if (!sessions.length) {
+      const p = document.createElement("p");
+      p.className = "log-empty";
+      p.textContent = "ยังไม่มีประวัติ จะเริ่มบันทึกเมื่อกดเริ่มจับเวลา";
+      els.logList.appendChild(p);
+      return;
+    }
+    sessions.forEach((se, n) => {
+      const d = document.createElement("details");
+      d.className = "log-session";
+      d.open = n === 0;
+      const lateNote = se.late ? ` • ⚠️ เตือนช้า ${se.late} ครั้ง` : "";
+      const sum = document.createElement("summary");
+      sum.innerHTML = `<b>${dmy(se.t)} เริ่ม ${hms(se.t)}</b><span>${sessionStatus(se, n === 0)} • เตือน ${se.alerts} ครั้ง${lateNote}</span>`;
+      d.appendChild(sum);
+      const ol = document.createElement("ol");
+      ol.className = "log-rows";
+      se.rows.forEach((r) => {
+        const li = document.createElement("li");
+        if (r.warn) li.className = "warn";
+        const t = document.createElement("time");
+        t.textContent = hms(r.t);
+        const body = document.createElement("div");
+        body.textContent = r.text;
+        if (r.note) { const sm = document.createElement("small"); sm.textContent = r.note; body.appendChild(sm); }
+        li.append(t, body);
+        ol.appendChild(li);
+      });
+      d.appendChild(ol);
+      els.logList.appendChild(d);
+    });
+  }
+
+  function historyText() {
+    return buildHistory().map((se, n) => {
+      const head = `${dmy(se.t)} เริ่ม ${hms(se.t)} • ${sessionStatus(se, n === 0)} • เตือน ${se.alerts} ครั้ง`;
+      return [head, ...se.rows.map((r) => `  ${hms(r.t)} ${r.text}${r.note ? ` (${r.note})` : ""}`)].join("\n");
+    }).join("\n\n");
   }
 
   // ---------- events ----------
@@ -801,6 +985,19 @@
   };
   els.dim.onclick = reveal;
   els.settingsBtn.onclick = () => els.settingsSheet.showModal();
+  els.openLog.onclick = () => { renderHistory(); els.copyNote.hidden = true; els.logSheet.showModal(); };
+  els.closeLog.onclick = () => els.logSheet.close();
+  els.logSheet.addEventListener("click", (e) => { if (e.target === els.logSheet) els.logSheet.close(); });
+  els.clearLog.onclick = () => { logs = []; try { localStorage.removeItem(LOG_KEY); } catch (_) {} renderHistory(); };
+  els.copyLog.onclick = async () => {
+    els.copyNote.hidden = false;
+    try {
+      await navigator.clipboard.writeText(historyText() || "ยังไม่มีประวัติ");
+      els.copyNote.textContent = "คัดลอกแล้ว นำไปวางส่งให้ผมดูได้เลย";
+    } catch (_) {
+      els.copyNote.textContent = "คัดลอกไม่ได้ ถ่ายภาพหน้าจอส่งแทนได้ครับ";
+    }
+  };
   els.settingsSheet.querySelector("[data-close]").onclick = () => els.settingsSheet.close();
   els.settingsSheet.addEventListener("click", (e) => { if (e.target === els.settingsSheet) els.settingsSheet.close(); }); // tap outside
   // Any tap while the controls are showing keeps them up a little longer.

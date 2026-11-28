@@ -738,3 +738,174 @@ test("dim screen repeats the warning when the screen may turn off", async ({ pag
   await ui(page).start.click();
   await expect(page.locator("#dimHint")).toHaveText(/จออาจดับเอง/);
 });
+
+test.describe("sitting history", () => {
+  const SETTINGS = { prep: 0, dim: false };
+  const openLog = async (page) => {
+    await page.locator("#settingsBtn").click();
+    await page.locator("#openLog").click();
+    await expect(page.locator("#logSheet")).toBeVisible();
+  };
+  const list = (page) => page.locator("#logList");
+
+  test("says so when there is nothing yet", async ({ page }) => {
+    await open(page, { settings: SETTINGS });
+    await openLog(page);
+    await expect(list(page)).toContainText("ยังไม่มีประวัติ");
+  });
+
+  test("records a whole sitting: start, alerts on time, finish", async ({ page }) => {
+    await open(page, { rounds: [60, 60], settings: SETTINGS });
+    await ui(page).start.click();
+    await advance(page, 2 * MIN + 500);
+    await openLog(page);
+    const log = list(page);
+    await expect(log).toContainText("เริ่ม 09:00:00");
+    await expect(log).toContainText("จบครบทุกรอบ • เตือน 2 ครั้ง");
+    await expect(log).toContainText("กดเริ่ม • 2 รอบ");
+    await expect(log).toContainText("เตือนจบรอบ 1");
+    await expect(log).toContainText("ควรเตือน 09:01:00");
+    await expect(log).toContainText("เตือนจบรอบ 2 (รอบสุดท้าย)");
+    await expect(log).toContainText("ตรงเวลา");
+    await expect(log).not.toContainText("ช้า");
+  });
+
+  test("shows an alert that came late because the page was asleep", async ({ page }) => {
+    await open(page, { rounds: [600, 600, 600], settings: SETTINGS });
+    await ui(page).start.click();
+    await page.clock.fastForward(25 * MIN); // timers did not run, like a hidden page
+    await page.clock.runFor(500);
+    await openLog(page);
+    const log = list(page);
+    await expect(log).toContainText("ควรเตือน 09:10:00");
+    await expect(log).toContainText("ช้า 15 นาที");
+    await expect(log).toContainText("ข้าม 1 รอบที่เลยเวลาไปแล้ว");
+    await expect(log).toContainText("เตือนช้า 1 ครั้ง");
+  });
+
+  test("notes when the page was hidden and for how long", async ({ page }) => {
+    await open(page, { rounds: [1800], settings: SETTINGS });
+    await ui(page).start.click();
+    const setVisibility = (v) => page.evaluate((v) => {
+      Object.defineProperty(document, "visibilityState", { value: v, configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, v);
+    await setVisibility("hidden");
+    await advance(page, 5 * MIN);
+    await setVisibility("visible");
+    await openLog(page);
+    await expect(list(page)).toContainText("หน้านี้ถูกซ่อน");
+    await expect(list(page)).toContainText("กลับมาที่หน้านี้");
+    await expect(list(page)).toContainText("หายไป 5 นาที");
+  });
+
+  test("flags an alert fired while the audio system was suspended", async ({ page }) => {
+    await page.addInitScript(() => {
+      const Real = window.AudioContext;
+      window.AudioContext = function (...args) {
+        const ctx = new Real(...args);
+        Object.defineProperty(ctx, "state", { get: () => "suspended" });
+        ctx.resume = () => Promise.resolve();
+        return ctx;
+      };
+    });
+    await open(page, { rounds: [60], settings: SETTINGS });
+    await ui(page).start.click();
+    await advance(page, 1 * MIN + 500);
+    await openLog(page);
+    await expect(list(page)).toContainText("ระบบเสียงถูกพัก");
+  });
+
+  test("flags a sitting cut short when the app was closed or reloaded", async ({ page }) => {
+    await open(page, { rounds: [1800], settings: SETTINGS });
+    await ui(page).start.click();
+    await advance(page, 3 * MIN);
+    await page.reload();
+    await openLog(page);
+    await expect(list(page)).toContainText("ถูกขัดจังหวะ");
+    await expect(list(page)).toContainText("แอพถูกปิดหรือรีโหลดก่อนจบ");
+    await expect(list(page)).toContainText("เหตุการณ์สุดท้ายที่บันทึกไว้");
+  });
+
+  test("a sitting that was reset or paused is described as such", async ({ page }) => {
+    await open(page, { rounds: [600], settings: SETTINGS });
+    const u = ui(page);
+    await u.start.click();
+    await advance(page, 4 * MIN);
+    await u.start.click(); // pause
+    await u.start.click(); // resume
+    await u.reset.click();
+    await openLog(page);
+    await expect(list(page)).toContainText("กดเลิก");
+    await expect(list(page)).toContainText("หยุดชั่วคราว");
+    await expect(list(page)).toContainText("เหลือ 6 นาที");
+    await expect(list(page)).toContainText("ทำต่อ");
+  });
+
+  test("records whether keeping the screen on worked", async ({ page }) => {
+    await page.addInitScript(() => {
+      const api = { async request() { throw new DOMException("no", "NotAllowedError"); } };
+      Object.defineProperty(Navigator.prototype, "wakeLock", { get: () => api, configurable: true });
+    });
+    await open(page, { rounds: [600], settings: SETTINGS });
+    await ui(page).start.click();
+    await openLog(page);
+    await expect(list(page)).toContainText("กันจอดับ: มือถือไม่อนุญาต");
+  });
+
+  test("newest sitting first, and history survives a reload", async ({ page }) => {
+    await open(page, { rounds: [60], settings: SETTINGS });
+    const u = ui(page);
+    await u.start.click();
+    await advance(page, 1 * MIN + 500);
+    await u.start.click(); // start again from "finished"
+    await advance(page, 30_000);
+    await page.reload();
+    await openLog(page);
+    const sessions = list(page).locator(".log-session");
+    await expect(sessions).toHaveCount(2);
+    await expect(sessions.nth(0)).toContainText("ถูกขัดจังหวะ"); // the second, cut short
+    await expect(sessions.nth(1)).toContainText("จบครบทุกรอบ");
+  });
+
+  test("clear removes the history", async ({ page }) => {
+    await open(page, { rounds: [60], settings: SETTINGS });
+    await ui(page).start.click();
+    await advance(page, 1 * MIN + 500);
+    await openLog(page);
+    await expect(list(page).locator(".log-session")).toHaveCount(1);
+    await page.locator("#clearLog").click();
+    await expect(list(page)).toContainText("ยังไม่มีประวัติ");
+    await page.reload();
+    await openLog(page);
+    await expect(list(page)).toContainText("ยังไม่มีประวัติ");
+  });
+
+  test("copy puts a readable text version on the clipboard", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await open(page, { rounds: [60], settings: SETTINGS });
+    await ui(page).start.click();
+    await advance(page, 1 * MIN + 500);
+    await openLog(page);
+    await page.locator("#copyLog").click();
+    await expect(page.locator("#copyNote")).toContainText("คัดลอกแล้ว");
+    const text = await page.evaluate(() => navigator.clipboard.readText());
+    expect(text).toContain("เริ่ม 09:00:00");
+    expect(text).toContain("เตือนจบรอบ 1 (รอบสุดท้าย)");
+    expect(text).toContain("ควรเตือน 09:01:00");
+  });
+
+  test("keeps only the latest 400 events", async ({ page }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded-log")) return;
+      sessionStorage.setItem("seeded-log", "1");
+      const old = Array.from({ length: 500 }, (_, i) => ({ t: 1_700_000_000_000 + i, e: i === 0 ? "start" : "vis", v: "hidden", r: [60] }));
+      old.push({ t: 1_700_000_001_000, e: "finish" });
+      localStorage.setItem("multi-round-timer:v1:log", JSON.stringify(old));
+    });
+    await open(page, { rounds: [60], settings: SETTINGS });
+    await ui(page).start.click();
+    const size = await page.evaluate(() => JSON.parse(localStorage.getItem("multi-round-timer:v1:log")).length);
+    expect(size).toBeLessThanOrEqual(400);
+  });
+});
